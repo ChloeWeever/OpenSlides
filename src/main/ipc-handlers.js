@@ -507,8 +507,8 @@ function themeVarsStyle(tv) {
 function buildSlideDiv(slide, extraClass) {
   if (slide.soloHtml) {
     const escaped = slide.soloHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-    const cls = extraClass ? ` ${extraClass}` : '';
-    return `<div class="slide-container${cls}" style="padding:0;overflow:hidden;display:flex;align-items:center;justify-content:center;">`
+    const cls = extraClass && extraClass !== 'slide-page' ? ` ${extraClass}` : '';
+    return `<div class="slide-page${cls}" style="padding:0;overflow:hidden;align-items:center;justify-content:center;">`
       + `<iframe srcdoc="${escaped}" style="width:1920px;height:1080px;border:none;display:block;flex-shrink:0;" sandbox="allow-scripts allow-same-origin"></iframe>`
       + `</div>`;
   }
