@@ -41,6 +41,7 @@ document.querySelectorAll('.el-diagram[data-diagram]').forEach(function(el) {
     renderDiagram(el, spec);
   } catch(e) { console.warn('diagram init error', e); }
 });
+console.log('__ready__');
 `;
 
 const SYSTEM_PROMPT = `You are an AI presentation assistant. You create beautiful, modern slides using a rich design system.
@@ -614,16 +615,12 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
   if (canceled || !filePath) return { success: false };
 
   const W = 1920, H = 1080;
-  const tmpDir = require('os').tmpdir();
 
-  // Use a VISIBLE but off-screen window — hidden windows don't paint in Electron 29
+  // Single offscreen window reused for all slides
   const offscreen = new BrowserWindow({
-    width: W,
-    height: H,
-    x: -W - 100,
-    y: 0,
-    frame: false,
-    skipTaskbar: true,
+    width: W, height: H,
+    x: -W - 100, y: 0,
+    frame: false, skipTaskbar: true,
     webPreferences: { contextIsolation: true },
   });
   offscreen.showInactive();
@@ -634,23 +631,36 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
     for (let i = 0; i < slides.length; i++) {
       const slide = slides[i];
       const html = buildSingleSlideHTML(slide, W, H);
-      const tmpPath = path.join(tmpDir, `openslides-slide-${Date.now()}-${i}.html`);
-      fs.writeFileSync(tmpPath, html, 'utf8');
+      // Use data: URL to avoid temp-file I/O
+      const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
 
       await new Promise((resolve, reject) => {
-        const onFail = (_, code, desc) => reject(new Error(desc || 'load failed'));
-        offscreen.webContents.once('did-finish-load', resolve);
-        offscreen.webContents.once('did-fail-load', onFail);
-        offscreen.loadFile(tmpPath);
-      });
+        const onFail = (_, code, desc) => { cleanup(); reject(new Error(desc || 'load failed')); };
+        let settled = false;
 
-      // Wait for paint and diagram JS to render
-      await new Promise(r => setTimeout(r, 600));
+        // Resolve as soon as the page signals it's ready (diagram JS emits console.log('__ready__'))
+        const onConsole = (_e, level, message) => {
+          if (message === '__ready__' && !settled) { settled = true; cleanup(); resolve(); }
+        };
+        // Fallback: resolve 200ms after load finishes (for slides with no diagrams)
+        const onLoad = () => {
+          if (!settled) setTimeout(() => { if (!settled) { settled = true; cleanup(); resolve(); } }, 200);
+        };
+
+        function cleanup() {
+          offscreen.webContents.removeListener('console-message', onConsole);
+          offscreen.webContents.removeListener('did-finish-load', onLoad);
+          offscreen.webContents.removeListener('did-fail-load', onFail);
+        }
+
+        offscreen.webContents.on('console-message', onConsole);
+        offscreen.webContents.once('did-finish-load', onLoad);
+        offscreen.webContents.once('did-fail-load', onFail);
+        offscreen.loadURL(dataUrl);
+      });
 
       const image = await offscreen.webContents.capturePage({ x: 0, y: 0, width: W, height: H });
       jpegs.push(image.toJPEG(92));
-
-      try { fs.unlinkSync(tmpPath); } catch {}
     }
 
     const pdfBytes = buildPDFFromJPEGs(jpegs, W, H);
