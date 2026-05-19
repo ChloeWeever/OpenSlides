@@ -124,7 +124,7 @@ body {
 
 /* Main heading */
 .el-heading {
-  font-size: clamp(36px, 6vw, 72px);
+  font-size: 52px;
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: -0.03em;
@@ -141,7 +141,7 @@ body {
 
 /* Subheading / lede */
 .el-subheading {
-  font-size: clamp(18px, 2.4vw, 30px);
+  font-size: 22px;
   font-weight: 300;
   line-height: 1.5;
   letter-spacing: -0.01em;
@@ -150,7 +150,7 @@ body {
 
 /* Body paragraph */
 .el-body {
-  font-size: clamp(15px, 1.7vw, 20px);
+  font-size: 17px;
   line-height: 1.75;
   color: var(--text-2);
   max-width: 80ch;
@@ -167,7 +167,7 @@ body {
 }
 
 .el-bullets li {
-  font-size: clamp(14px, 1.7vw, 20px);
+  font-size: 17px;
   line-height: 1.55;
   color: var(--text-1);
   padding-left: 1.6em;
@@ -189,7 +189,7 @@ body {
 
 .el-image {
   max-width: 100%;
-  max-height: 50vh;
+  max-height: 420px;
   object-fit: contain;
   border-radius: var(--radius);
   display: block;
@@ -262,14 +262,14 @@ body {
 }
 
 .el-card .card-title {
-  font-size: clamp(14px, 1.6vw, 18px);
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-1);
   letter-spacing: -0.01em;
 }
 
 .el-card .card-body {
-  font-size: clamp(12px, 1.3vw, 15px);
+  font-size: 13px;
   color: var(--text-2);
   line-height: 1.6;
 }
@@ -297,7 +297,7 @@ body {
 }
 
 .el-stat .stat-value {
-  font-size: clamp(36px, 5vw, 60px);
+  font-size: 48px;
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -315,7 +315,7 @@ body {
 /* ── Quote ─────────────────────────────────────────────────────────────────── */
 .el-quote {
   font-family: var(--font-serif);
-  font-size: clamp(22px, 3.5vw, 44px);
+  font-size: 36px;
   font-weight: 400;
   font-style: italic;
   line-height: 1.45;
@@ -336,7 +336,7 @@ body {
 }
 
 .el-quote-author {
-  font-size: clamp(13px, 1.4vw, 16px);
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: .06em;
   color: var(--text-3);
@@ -390,7 +390,7 @@ body {
 
 /* ── Section number (for section-divider layout) ───────────────────────────── */
 .el-section-num {
-  font-size: clamp(80px, 14vw, 160px);
+  font-size: 120px;
   font-weight: 900;
   line-height: 1;
   letter-spacing: -0.05em;
@@ -455,12 +455,12 @@ body {
 
 .el-diagram canvas {
   max-width: 100%;
-  max-height: 52vh;
+  max-height: 440px;
 }
 
 .el-diagram svg {
   max-width: 100%;
-  max-height: 52vh;
+  max-height: 440px;
   overflow: visible;
 }
 
