@@ -239,6 +239,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
       const outlineResult = await window.openslides.genSoloOutline(text, settings);
       if (!outlineResult.success) throw new Error(outlineResult.error);
       const outline = outlineResult.data?.slides;
+      const theme = outlineResult.data?.theme || null;
       if (!Array.isArray(outline) || !outline.length) throw new Error(t('genFailed'));
 
       setMessages((prev) => {
@@ -261,7 +262,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
         setGenStep(i + 1);
         const s = outline[i];
         const slideResult = await window.openslides.genSoloSlide(
-          { outlineSlide: s, allOutline: outline, userRequest: text, slideIndex: i, totalSlides: outline.length },
+          { outlineSlide: s, allOutline: outline, userRequest: text, slideIndex: i, totalSlides: outline.length, theme },
           settings
         );
         if (!slideResult.success || !slideResult.data?.html) {

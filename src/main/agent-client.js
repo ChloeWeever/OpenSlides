@@ -58,14 +58,13 @@ STRICT RULES:
 - body { margin:0; padding:0; width:1920px; height:1080px; overflow:hidden; }
 - NO JavaScript
 - Output ONLY raw HTML — no markdown fences, no explanation
+- Follow the design theme colors and font provided in the user message EXACTLY
 
 CONCISENESS — your output MUST fit in ~3000 tokens:
-- Use CSS shorthand aggressively (font: bold 64px/1.2 Arial)
-- Combine selectors where possible; avoid redundant properties
-- Prefer SVG over complex CSS shapes
+- Use a <style> block in <head> for shared styles; avoid repeating inline styles
+- CSS shorthand aggressively (font: bold 64px/1.2 Arial)
 - No comments in the HTML/CSS
-- Limit total element count — a clean slide needs 5–15 elements, not 50
-- Avoid long repeated inline style blocks; group shared styles in a <style> tag in <head>`;
+- Limit total element count — a clean slide needs 5–15 elements, not 50`;
 
 // ── Tool definitions ──────────────────────────────────────────────────────────
 
@@ -259,14 +258,24 @@ Call the generate_slide tool with the complete slide object.`;
   return { success: true, data: { action: 'add_slides', slides: [slide] } };
 }
 
-async function genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides }, settings) {
+async function genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme }, settings) {
   const label = `solo slide ${slideIndex + 1}/${totalSlides} "${outlineSlide.title}"`;
   log.info(`▶ genSoloSlide ${label} — model: ${settings.modelName || 'gpt-4o'}`);
   const t0 = Date.now();
 
-  const userPrompt = `Slide title: ${outlineSlide.title || ''}
+  const themeBlock = theme ? `
+Design theme (apply consistently):
+- Background: ${theme.bg || '#0f0f1a'}
+- Accent color: ${theme.accent || '#6c63ff'}
+- Text color: ${theme.text || '#ffffff'}
+- Subtext color: ${theme.subtext || '#a0a0b8'}
+- Font: ${theme.font || 'Inter, Arial, sans-serif'}
+- Style: ${theme.style || 'dark modern'}
+` : '';
+
+  const userPrompt = `${themeBlock}Slide title: ${outlineSlide.title || ''}
 Content brief: ${outlineSlide.notes || outlineSlide.title || ''}
-Overall topic: ${userRequest}
+Slide style: ${outlineSlide.style || 'content slide'}
 This is slide ${slideIndex + 1} of ${totalSlides}
 
 Output the complete HTML document now.`;

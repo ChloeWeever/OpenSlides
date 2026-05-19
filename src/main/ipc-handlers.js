@@ -164,14 +164,32 @@ ipcMain.handle('llm:gen-slide', async (_event, { outlineSlide, allOutline, userR
 const SOLO_OUTLINE_PROMPT = `You are a presentation planning assistant. Given the user's request, output a slide outline as JSON.
 
 Respond ONLY with raw JSON — no markdown, no explanation:
-{"action":"outline","slides":[
-  {"id":"slide-1","title":"Slide Title","notes":"Key points and content for this slide"}
-]}
+{
+  "action": "outline",
+  "theme": {
+    "bg": "#0f0f1a",
+    "accent": "#6c63ff",
+    "text": "#ffffff",
+    "subtext": "#a0a0b8",
+    "font": "Inter, Arial, sans-serif",
+    "style": "dark modern gradient"
+  },
+  "slides": [
+    {
+      "id": "slide-1",
+      "title": "Slide Title",
+      "notes": "Key points and content for this slide",
+      "style": "hero — large headline, bold accent color, minimal elements"
+    }
+  ]
+}
 
 Rules:
+- theme: ONE consistent design system for the whole deck. Choose colors and font that suit the topic. style = 2-4 descriptive words (e.g. "dark tech minimal", "bright clean corporate", "bold colorful startup")
 - id: "slide-1", "slide-2", … (sequential)
 - title: the real heading text for this slide
-- notes: 1-3 sentences describing what this slide should cover (used as content brief for the designer)
+- notes: 1-3 sentences describing what this slide should cover
+- style (per slide): layout + mood hint for the designer, e.g. "hero full-bleed", "two-column data", "big quote centered", "icon grid", "timeline horizontal", "chart + callout"
 - Aim for 6-12 slides unless the request clearly needs more or fewer`;
 
 // solo-slide generation is handled by agent-client.js (LangGraph tool calling)
@@ -189,15 +207,16 @@ ipcMain.handle('llm:solo-outline', async (_event, { text, settings }) => {
     if (!Array.isArray(slides) || !slides.length) {
       return { success: false, error: `Outline format error: ${rawText.slice(0, 300)}` };
     }
-    return { success: true, data: { action: 'outline', slides }, raw: rawText };
+    const theme = parsed.theme || null;
+    return { success: true, data: { action: 'outline', slides, theme }, raw: rawText };
   } catch (err) {
     return { success: false, error: err.message };
   }
 });
 
-ipcMain.handle('llm:solo-slide', async (_event, { outlineSlide, allOutline, userRequest, slideIndex, totalSlides, settings }) => {
+ipcMain.handle('llm:solo-slide', async (_event, { outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme, settings }) => {
   try {
-    return await genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides }, settings);
+    return await genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme }, settings);
   } catch (err) {
     return { success: false, error: err.message };
   }
