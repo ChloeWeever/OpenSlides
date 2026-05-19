@@ -19,29 +19,28 @@ try {
   console.warn('Could not load diagram renderer assets:', e.message);
 }
 
-// Glue script for exported HTML: reads data-diagram attrs and initialises diagrams
+// Glue script for exported HTML: reads data-diagram attrs and initialises diagrams.
+// themeColors must be a top-level var so renderChartJS/renderFlow/renderMindmap can see it.
 const DIAGRAM_INIT_JS = `
-(function() {
-  var themeColors = { text1:'#cdd6f4', text2:'#a6adc8', text3:'#6c7086', accent:'#89b4fa', border:'rgba(255,255,255,.08)' };
-  function resolveThemeColors(container) {
-    var cs = getComputedStyle(container);
-    var get = function(v, fb) { return cs.getPropertyValue(v).trim() || fb; };
-    themeColors = {
-      text1:  get('--text-1','#cdd6f4'),
-      text2:  get('--text-2','#a6adc8'),
-      text3:  get('--text-3','#6c7086'),
-      accent: get('--accent','#89b4fa'),
-      border: get('--border','rgba(255,255,255,.08)'),
-    };
-  }
-  document.querySelectorAll('.el-diagram[data-diagram]').forEach(function(el) {
-    try {
-      var spec = JSON.parse(el.getAttribute('data-diagram'));
-      resolveThemeColors(el.closest('.slide-container') || el);
-      renderDiagram(el, spec);
-    } catch(e) { console.warn('diagram init error', e); }
-  });
-})();
+var themeColors = { text1:'#cdd6f4', text2:'#a6adc8', text3:'#6c7086', accent:'#89b4fa', border:'rgba(255,255,255,.08)' };
+function _resolveThemeColors(container) {
+  var cs = getComputedStyle(container);
+  var get = function(v, fb) { return cs.getPropertyValue(v).trim() || fb; };
+  themeColors = {
+    text1:  get('--text-1','#cdd6f4'),
+    text2:  get('--text-2','#a6adc8'),
+    text3:  get('--text-3','#6c7086'),
+    accent: get('--accent','#89b4fa'),
+    border: get('--border','rgba(255,255,255,.08)'),
+  };
+}
+document.querySelectorAll('.el-diagram[data-diagram]').forEach(function(el) {
+  try {
+    var spec = JSON.parse(el.getAttribute('data-diagram'));
+    _resolveThemeColors(el.closest('.slide-container') || el);
+    renderDiagram(el, spec);
+  } catch(e) { console.warn('diagram init error', e); }
+});
 `;
 
 const SYSTEM_PROMPT = `You are an AI presentation assistant. You create beautiful, modern slides using a rich design system.
