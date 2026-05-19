@@ -701,7 +701,6 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
     offscreen.destroy();
     try { fs.unlinkSync(tmpHtml); } catch (_) {}
   }
-  }
 });
 
 // Vertical printable HTML — one .slide-page div per slide, each exactly W×H px.
