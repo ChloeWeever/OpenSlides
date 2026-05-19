@@ -689,15 +689,30 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
       const isSolo = !!slides[i].soloHtml;
       await offscreen.webContents.executeJavaScript(`
         document.querySelectorAll('.slide-page').forEach(function(el, j) {
-          el.style.display = j === ${i} ? ${isSolo ? "'block'" : "'flex'"} : 'none';
+          el.style.display = j === ${i} ? 'flex' : 'none';
         });
       `);
-      // Wait for repaint; solo slides may have inline JS that needs an extra tick
-      await offscreen.webContents.executeJavaScript(
-        isSolo
-          ? 'new Promise(function(r){ setTimeout(r, 120); })'
-          : 'new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); })'
-      );
+      if (isSolo) {
+        // Wait for the iframe's srcdoc to finish loading before capturing
+        await offscreen.webContents.executeJavaScript(`
+          new Promise(function(resolve) {
+            var iframe = document.querySelector('iframe[data-solo="${i}"]');
+            if (!iframe) return resolve();
+            if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
+              setTimeout(resolve, 80);
+            } else {
+              iframe.onload = function() { setTimeout(resolve, 80); };
+              // Fallback: give up waiting after 5s
+              setTimeout(resolve, 5000);
+            }
+          })
+        `);
+      } else {
+        // One rAF tick to ensure repaint
+        await offscreen.webContents.executeJavaScript(
+          'new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); })'
+        );
+      }
       const image = await offscreen.webContents.capturePage({ x: 0, y: 0, width: W, height: H });
       jpegs.push(image.toJPEG(92));
     }
@@ -738,17 +753,11 @@ ${_diagramRendererJS ? `<script>${_diagramRendererJS}\n${DIAGRAM_INIT_JS}</scrip
 // Single HTML with all slides — used by PDF export to avoid reloading per slide
 function buildAllSlidesHTML(slides, w, h) {
   const pages = slides.map((s, i) => {
-    const display = `display:${i === 0 ? 'block' : 'none'};position:absolute;inset:0;width:${w}px;height:${h}px;overflow:hidden;`;
+    const display = `display:${i === 0 ? 'flex' : 'none'};position:absolute;inset:0;`;
     if (s.soloHtml) {
-      // Extract <style> and <body> content from the solo HTML to inline it directly —
-      // iframes inside an offscreen window never finish loading, causing PDF capture to hang.
-      const styleMatch = s.soloHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
-      const bodyMatch  = s.soloHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-      const inlineStyle = styleMatch ? styleMatch[1] : '';
-      const inlineBody  = bodyMatch  ? bodyMatch[1]  : s.soloHtml;
+      const escaped = s.soloHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
       return `<div class="slide-page" style="${display}">`
-        + (inlineStyle ? `<style>${inlineStyle}</style>` : '')
-        + inlineBody
+        + `<iframe data-solo="${i}" srcdoc="${escaped}" style="width:${w}px;height:${h}px;border:none;display:block;" sandbox="allow-scripts allow-same-origin"></iframe>`
         + `</div>`;
     }
     const bg = s.background || '#1e1e2e';
