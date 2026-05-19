@@ -1,6 +1,7 @@
 const { ipcMain, dialog, BrowserWindow } = require('electron');
 const store = require('./store');
 const { callLLM, parseJSONResponse } = require('./llm-client');
+const { genSlideWithAgent, genSoloSlideWithAgent } = require('./agent-client');
 const path = require('path');
 const fs = require('fs');
 
@@ -133,54 +134,6 @@ Rules:
 - Do NOT add notes, subheading, contentHint, or any other field
 - Aim for 6-12 slides unless the request clearly needs more or fewer`;
 
-// Per-slide prompt: generates one complete slide given its outline entry
-const SLIDE_GEN_PROMPT = `You are a presentation slide designer. Generate ONE complete slide as JSON.
-
-Respond ONLY with valid JSON — no markdown fences, no explanation:
-{"action":"add_slides","slides":[{ ...slide object... }]}
-
-## Slide schema
-{
-  "id": "slide-N",
-  "layout": "title|content|section|two-column|big-quote|blank",
-  "background": "#hexcolor",
-  "transition": "slide|fade|zoom|none",
-  "elements": [ ...element objects... ]
-}
-
-## All element types — use EXACTLY these schemas:
-{"type":"kicker","text":"LABEL"}
-{"type":"heading","text":"Title","gradient":true}
-{"type":"subheading","text":"Subtitle"}
-{"type":"body","text":"Paragraph text."}
-{"type":"divider"}
-{"type":"bullets","items":["Point one","Point two","Point three"]}
-{"type":"pills","items":["Tag A","Tag B",{"text":"Accent","accent":true}]}
-{"type":"quote","text":"Quote text.","author":"Name, Title"}
-{"type":"stats","items":[{"label":"METRIC","value":"42K","delta":"+12%"},{"label":"ANOTHER","value":"$1.2M"}]}
-{"type":"cards","cols":3,"items":[{"icon":"🚀","title":"Title","body":"Description","accent":true},{"icon":"💡","title":"Title","body":"Description"}]}
-{"type":"diagram","kind":"bar","title":"Chart title","labels":["A","B","C"],"datasets":[{"label":"Series","data":[10,20,30],"color":"#89b4fa"}]}
-{"type":"diagram","kind":"line","title":"Trend","labels":["Q1","Q2","Q3"],"datasets":[{"label":"Series","data":[100,150,200]}]}
-{"type":"diagram","kind":"pie","title":"Share","labels":["A","B","C"],"datasets":[{"data":[40,35,25]}]}
-{"type":"diagram","kind":"flow","nodes":[{"id":"a","label":"Start"},{"id":"b","label":"Step"},{"id":"c","label":"End"}],"edges":[{"from":"a","to":"b"},{"from":"b","to":"c"}]}
-{"type":"diagram","kind":"mindmap","root":"Topic","children":[{"label":"Branch A","children":[{"label":"Leaf"}]},{"label":"Branch B"}]}
-
-## Layout → element pattern
-- "title":     kicker → heading(gradient:true) → subheading → divider → pills
-- "content":   kicker → heading(gradient:true) → divider → [bullets|cards|stats|diagram|body]
-- "section":   kicker → heading(gradient:true) → subheading
-- "two-column": kicker → heading → divider → body (left) and bullets/stats/image (right) — mark with {"column":"left"} / {"column":"right"}
-- "big-quote": quote with author
-- "blank":     any elements freely
-
-## Rules
-- ALWAYS start content/title slides with kicker → heading(gradient:true) → divider
-- Use the contentType hint to pick the main body element
-- Fill in REAL content from the user's original request — actual numbers, names, terms
-- Do NOT use placeholder text like "Description here" or "Your content"
-- background: alternate #0f0f1a / #13131f between slides (provided in user message)
-- Generate ONLY this single slide`;
-
 ipcMain.handle('llm:outline', async (_event, userRequest, settings) => {
   try {
     const messages = [
@@ -202,33 +155,7 @@ ipcMain.handle('llm:outline', async (_event, userRequest, settings) => {
 
 ipcMain.handle('llm:gen-slide', async (_event, { outlineSlide, allOutline, userRequest, slideIndex, totalSlides }, settings) => {
   try {
-    const bg = slideIndex % 2 === 0 ? '#0f0f1a' : '#13131f';
-    const transition = slideIndex === 0 ? 'fade' : 'slide';
-    const outlineJson = JSON.stringify(outlineSlide);
-    const prompt = `User's original request:
-${userRequest}
-
-Full outline (${totalSlides} slides total):
-${allOutline.map((s, i) => `  ${i+1}. [${s.layout}] ${s.title}${s.kicker ? ' · ' + s.kicker : ''}${s.contentType ? ' [' + s.contentType + ']' : ''}`).join('\n')}
-
-Generate slide ${slideIndex + 1} of ${totalSlides}:
-${outlineJson}
-
-Required: background="${bg}", transition="${transition}"
-Fill ALL body content with real information from the user's original request above.`;
-
-    const messages = [
-      { role: 'system', content: SLIDE_GEN_PROMPT },
-      { role: 'user', content: prompt },
-    ];
-    const rawText = await callLLM(messages, settings, 4096);
-    const parsed = parseJSONResponse(rawText);
-    if (!parsed) return { success: false, error: `幻灯片 ${slideIndex + 1} JSON解析失败: ${rawText.slice(0, 200)}` };
-    const slides = parsed.slides || (parsed.action ? null : [parsed]);
-    if (!Array.isArray(slides) || !slides.length) {
-      return { success: false, error: `幻灯片 ${slideIndex + 1} 格式错误` };
-    }
-    return { success: true, data: { action: 'add_slides', slides }, raw: rawText };
+    return await genSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides }, settings);
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -247,23 +174,7 @@ Rules:
 - notes: 1-3 sentences describing what this slide should cover (used as content brief for the designer)
 - Aim for 6-12 slides unless the request clearly needs more or fewer`;
 
-const SOLO_SLIDE_PROMPT = `You are a world-class presentation designer. Create ONE visually stunning slide as a complete self-contained HTML document.
-
-Output ONLY the raw HTML — starting with <!DOCTYPE html> and nothing else. No JSON, no markdown, no explanation.
-
-Rules:
-- Must be a complete <!DOCTYPE html> document
-- Use ONLY inline CSS — no external stylesheets, no CDN links, no @import
-- Slide canvas: body { margin:0; padding:0; width:1920px; height:1080px; overflow:hidden; }
-- Design guidelines: bold typography, generous whitespace, strong color contrast
-- You may freely use SVG elements, CSS gradients, CSS shapes, CSS animations
-- Do NOT use any JavaScript
-- The design should reflect the slide title and content below
-
-Slide title: {TITLE}
-Content brief: {NOTES}
-Overall topic: {TOPIC}
-This is slide {INDEX} of {TOTAL}`;
+// solo-slide generation is handled by agent-client.js (LangGraph tool calling)
 
 ipcMain.handle('llm:solo-outline', async (_event, { text, settings }) => {
   try {
@@ -286,21 +197,7 @@ ipcMain.handle('llm:solo-outline', async (_event, { text, settings }) => {
 
 ipcMain.handle('llm:solo-slide', async (_event, { outlineSlide, allOutline, userRequest, slideIndex, totalSlides, settings }) => {
   try {
-    const prompt = SOLO_SLIDE_PROMPT
-      .replace('{TITLE}', outlineSlide.title || '')
-      .replace('{NOTES}', outlineSlide.notes || outlineSlide.title || '')
-      .replace('{TOPIC}', userRequest)
-      .replace('{INDEX}', String(slideIndex + 1))
-      .replace('{TOTAL}', String(totalSlides));
-
-    const messages = [
-      { role: 'user', content: prompt },
-    ];
-    const rawText = await callLLM(messages, settings, 8192);
-    // Response is raw HTML — strip markdown fences if the model wrapped it anyway
-    const html = rawText.replace(/^```(?:html)?\s*/m, '').replace(/```\s*$/m, '').trim();
-    if (!html || !html.includes('<')) return { success: false, error: `Solo slide ${slideIndex + 1}: no HTML in response` };
-    return { success: true, data: { action: 'solo_slide', html }, raw: rawText };
+    return await genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides }, settings);
   } catch (err) {
     return { success: false, error: err.message };
   }
