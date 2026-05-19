@@ -50,7 +50,7 @@ const SLIDE_GEN_SYSTEM = `You are a presentation slide designer. Use the generat
 - Do NOT use placeholder text like "Description here" or "Your content"
 - Call generate_slide ONCE with the complete slide object`;
 
-const SOLO_SLIDE_SYSTEM = `You are a world-class presentation designer. Use the generate_solo_html tool to output ONE complete slide as a self-contained HTML document.
+const SOLO_SLIDE_SYSTEM = `You are a world-class presentation designer. Output ONE complete slide as a self-contained HTML document.
 
 Rules for the HTML:
 - Must be a complete <!DOCTYPE html> document
@@ -59,7 +59,7 @@ Rules for the HTML:
 - Design guidelines: bold typography, generous whitespace, strong color contrast
 - You may freely use SVG elements, CSS gradients, CSS shapes, CSS animations
 - Do NOT use any JavaScript
-- Call generate_solo_html ONCE with the complete HTML string`;
+- Output ONLY the raw HTML — no markdown fences, no explanation, no commentary`;
 
 // ── Tool definitions ──────────────────────────────────────────────────────────
 
@@ -103,6 +103,27 @@ const log = {
 };
 
 // ── Model factory ─────────────────────────────────────────────────────────────
+
+function buildPlainModel(settings, maxTokens = 8192) {
+  const provider = (settings.apiProvider || 'openai').toLowerCase();
+  if (provider === 'anthropic') {
+    const cleanModel = (settings.modelName || 'claude-3-5-sonnet-20241022').replace(/^anthropic[-/]+/i, '');
+    log.info(`buildPlainModel: anthropic model="${cleanModel}"`);
+    return new ChatAnthropic({ apiKey: settings.apiKey, model: cleanModel, maxTokens });
+  }
+  const defaultOpenAI = /^https?:\/\/api\.openai\.com\/?$/i.test(settings.baseUrl || '');
+  const baseUrl = (settings.baseUrl || '').replace(/\/$/, '');
+  const configuration = defaultOpenAI || !baseUrl
+    ? {}
+    : { baseURL: baseUrl.endsWith('/v1') ? baseUrl : baseUrl + '/v1' };
+  log.info(`buildPlainModel: openai model="${settings.modelName || 'gpt-4o'}" baseUrl="${baseUrl || '(default)'}"`);
+  return new ChatOpenAI({
+    apiKey: settings.apiKey,
+    model: settings.modelName || 'gpt-4o',
+    maxTokens,
+    ...(Object.keys(configuration).length ? { configuration } : {}),
+  });
+}
 
 function buildChatModel(settings, tools, maxTokens = 8192) {
   const provider = (settings.apiProvider || 'openai').toLowerCase();
@@ -242,25 +263,36 @@ Content brief: ${outlineSlide.notes || outlineSlide.title || ''}
 Overall topic: ${userRequest}
 This is slide ${slideIndex + 1} of ${totalSlides}
 
-Call the generate_solo_html tool with the complete HTML document.`;
+Output the complete HTML document now.`;
 
-  const llm = buildChatModel(settings, [generateSoloHtmlTool], 8192);
-  const messages = [
-    { role: 'system', content: SOLO_SLIDE_SYSTEM },
-    { role: 'user', content: userPrompt },
-  ];
+  // Solo HTML is plain text output — no tool binding needed (avoids LiteLLM large-arg issues)
+  const llm = buildPlainModel(settings, 8192);
+  log.info(`  invokeWithTool: calling model for plain HTML...`);
 
-  let args;
+  let response;
   try {
-    args = await invokeWithTool(llm, messages, 'generate_solo_html', label, t0);
+    response = await llm.invoke([
+      { role: 'system', content: SOLO_SLIDE_SYSTEM },
+      { role: 'user', content: userPrompt },
+    ]);
   } catch (err) {
-    log.error(`✗ genSoloSlide ${label} — failed (${Date.now() - t0}ms):`, err.message);
+    log.error(`✗ genSoloSlide ${label} — model invoke failed (${Date.now() - t0}ms):`, err.message);
     throw err;
   }
 
-  const html = typeof args.html === 'string' ? args.html : String(args.html ?? '');
+  log.info(`  response type=${response._getType?.() ?? typeof response}, content size=${typeof response.content === 'string' ? response.content.length : JSON.stringify(response.content).length}`);
+
+  let html = typeof response.content === 'string'
+    ? response.content
+    : Array.isArray(response.content)
+      ? response.content.map(b => (typeof b === 'string' ? b : b.text ?? '')).join('')
+      : String(response.content ?? '');
+
+  // Strip markdown fences if model wrapped the HTML
+  html = html.replace(/^```(?:html)?\s*/i, '').replace(/```\s*$/, '').trim();
+
   if (!html || !html.includes('<')) {
-    log.error(`✗ genSoloSlide ${label} — empty or invalid HTML (${html?.length ?? 0} chars)`);
+    log.error(`✗ genSoloSlide ${label} — empty or invalid HTML (${html?.length ?? 0} chars), preview: ${html?.slice(0, 200)}`);
     throw new Error(`Solo slide ${slideIndex + 1}: empty HTML returned`);
   }
 
