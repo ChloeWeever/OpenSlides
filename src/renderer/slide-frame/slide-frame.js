@@ -815,7 +815,7 @@ function showSlideSimple(slide, direction) {
   }
 
   // No transition: render directly into current
-  if (!currentSlide || !slide.transition || slide.transition === 'none') {
+  if (!currentSlide || !slide.transition || slide.transition === 'none' || direction === 'none') {
     renderSlide(current, slide);
     current.classList.remove('hidden');
     currentSlide = slide;
