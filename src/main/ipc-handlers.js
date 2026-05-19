@@ -686,14 +686,17 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
     // Capture each slide by showing it and screenshotting
     const jpegs = [];
     for (let i = 0; i < slides.length; i++) {
+      const isSolo = !!slides[i].soloHtml;
       await offscreen.webContents.executeJavaScript(`
         document.querySelectorAll('.slide-page').forEach(function(el, j) {
-          el.style.display = j === ${i} ? 'flex' : 'none';
+          el.style.display = j === ${i} ? ${isSolo ? "'block'" : "'flex'"} : 'none';
         });
       `);
-      // One rAF tick to ensure repaint
+      // Wait for repaint; solo slides may have inline JS that needs an extra tick
       await offscreen.webContents.executeJavaScript(
-        'new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); })'
+        isSolo
+          ? 'new Promise(function(r){ setTimeout(r, 120); })'
+          : 'new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); })'
       );
       const image = await offscreen.webContents.capturePage({ x: 0, y: 0, width: W, height: H });
       jpegs.push(image.toJPEG(92));
@@ -735,11 +738,17 @@ ${_diagramRendererJS ? `<script>${_diagramRendererJS}\n${DIAGRAM_INIT_JS}</scrip
 // Single HTML with all slides — used by PDF export to avoid reloading per slide
 function buildAllSlidesHTML(slides, w, h) {
   const pages = slides.map((s, i) => {
-    const display = `display:${i === 0 ? 'flex' : 'none'};position:absolute;inset:0;`;
+    const display = `display:${i === 0 ? 'block' : 'none'};position:absolute;inset:0;width:${w}px;height:${h}px;overflow:hidden;`;
     if (s.soloHtml) {
-      const escaped = s.soloHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+      // Extract <style> and <body> content from the solo HTML to inline it directly —
+      // iframes inside an offscreen window never finish loading, causing PDF capture to hang.
+      const styleMatch = s.soloHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+      const bodyMatch  = s.soloHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+      const inlineStyle = styleMatch ? styleMatch[1] : '';
+      const inlineBody  = bodyMatch  ? bodyMatch[1]  : s.soloHtml;
       return `<div class="slide-page" style="${display}">`
-        + `<iframe srcdoc="${escaped}" style="width:100%;height:100%;border:none;display:block;" sandbox="allow-scripts"></iframe>`
+        + (inlineStyle ? `<style>${inlineStyle}</style>` : '')
+        + inlineBody
         + `</div>`;
     }
     const bg = s.background || '#1e1e2e';
