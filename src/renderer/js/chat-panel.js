@@ -124,7 +124,8 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
       if (!s) return s;
       if (s.soloHtml) {
         const { soloHtml, ...rest } = s;
-        return { ...rest, soloHtml: `[Solo HTML, ${soloHtml.length} chars]` };
+        // Include full soloHtml so AI can edit it; other slides in history are already truncated
+        return { ...rest, soloHtml };
       }
       return s;
     };

@@ -51,6 +51,7 @@ Respond ONLY with valid JSON in one of these formats:
 1. Replace all slides: {"action":"replace_all","slides":[...]}
 2. Add slides:        {"action":"add_slides","slides":[...]}
 3. Update one slide:  {"action":"update_slide","slideId":"<id>","slide":{...}}
+   - For Solo slides (soloHtml present): {"action":"update_slide","slideId":"<id>","slide":{"soloHtml":"<complete updated html>"}}
 4. Delete a slide:    {"action":"delete_slide","slideId":"<id>"}
 5. Chat only:         {"action":"message","message":"<text>"}
 
