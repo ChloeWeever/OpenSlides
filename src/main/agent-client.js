@@ -59,6 +59,7 @@ Rules for the HTML:
 - Design guidelines: bold typography, generous whitespace, strong color contrast
 - You may freely use SVG elements, CSS gradients, CSS shapes, CSS animations
 - Do NOT use any JavaScript
+- Keep CSS concise — avoid redundant rules, use shorthand properties
 - Output ONLY the raw HTML — no markdown fences, no explanation, no commentary`;
 
 // ── Tool definitions ──────────────────────────────────────────────────────────
@@ -266,7 +267,7 @@ This is slide ${slideIndex + 1} of ${totalSlides}
 Output the complete HTML document now.`;
 
   // Solo HTML is plain text output — no tool binding needed (avoids LiteLLM large-arg issues)
-  const llm = buildPlainModel(settings, 8192);
+  const llm = buildPlainModel(settings, 16000);
   log.info(`  invokeWithTool: calling model for plain HTML...`);
 
   let response;
@@ -282,6 +283,16 @@ Output the complete HTML document now.`;
 
   log.info(`  response type=${response._getType?.() ?? typeof response}, content size=${typeof response.content === 'string' ? response.content.length : JSON.stringify(response.content).length}`);
 
+  // Log stop reason so we can detect max_tokens truncation
+  const stopReason = response.response_metadata?.stop_reason
+    ?? response.response_metadata?.finish_reason
+    ?? response.additional_kwargs?.finish_reason
+    ?? '(unknown)';
+  log.info(`  stop_reason: ${stopReason}`);
+  if (stopReason === 'max_tokens' || stopReason === 'length') {
+    log.warn(`  WARNING: output was truncated by max_tokens limit — increase maxTokens`);
+  }
+
   let html = typeof response.content === 'string'
     ? response.content
     : Array.isArray(response.content)
@@ -290,6 +301,13 @@ Output the complete HTML document now.`;
 
   // Strip markdown fences if model wrapped the HTML
   html = html.replace(/^```(?:html)?\s*/i, '').replace(/```\s*$/, '').trim();
+
+  // If truncated (no closing tags), patch it so the browser can at least render what's there
+  if (html && !html.includes('</html>')) {
+    log.warn(`  genSoloSlide: HTML appears truncated (no </html>) — patching`);
+    if (!html.includes('</body>')) html += '\n</body>';
+    html += '\n</html>';
+  }
 
   if (!html || !html.includes('<')) {
     log.error(`✗ genSoloSlide ${label} — empty or invalid HTML (${html?.length ?? 0} chars), preview: ${html?.slice(0, 200)}`);
