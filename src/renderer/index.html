@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com blob: data:; img-src * data: blob:; connect-src *;" />
+  <title>OpenSlides</title>
+  <link rel="stylesheet" href="css/app.css" />
+
+  <!-- Tailwind CSS CDN (play CDN for dev/no-build) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <!-- React 18 UMD -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+
+  <!-- Babel standalone for JSX transpilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Lucide icons (UMD) -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body class="bg-[#0f0f0f] text-[#e2e8f0] overflow-hidden h-screen">
+  <div id="root"></div>
+
+  <!-- Load JS modules in order via Babel/JSX -->
+  <script type="text/babel" data-presets="react" src="js/slide-manager.js"></script>
+  <script type="text/babel" data-presets="react" src="js/settings-modal.js"></script>
+  <script type="text/babel" data-presets="react" src="js/export-modal.js"></script>
+  <script type="text/babel" data-presets="react" src="js/session-sidebar.js"></script>
+  <script type="text/babel" data-presets="react" src="js/preview-panel.js"></script>
+  <script type="text/babel" data-presets="react" src="js/chat-panel.js"></script>
+  <script type="text/babel" data-presets="react" src="js/app.js"></script>
+</body>
+</html>

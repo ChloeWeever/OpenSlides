@@ -1,0 +1,19 @@
+{
+  "name": "openslides",
+  "version": "1.0.0",
+  "description": "AI-powered presentation editor",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^29.0.0"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0"
+  }
+}
