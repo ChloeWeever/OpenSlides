@@ -42,6 +42,7 @@ function renderSlide(container, slide) {
     return;
   }
   container.className = `slide-container layout-${slide.layout || 'content'}`;
+  container.style.cssText = '';
   container.style.background = slide.background || '';
   container.style.color = slide.color || '';
   // Apply per-slide CSS variable overrides for accent/gradient theming
