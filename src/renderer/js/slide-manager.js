@@ -102,12 +102,16 @@ function useSlideManager() {
           setCurrentIndex(0);
         }
         return;
-      case 'add_slides':
+      case 'add_slides': {
         if (Array.isArray(data.slides)) {
-          next = [...slides, ...data.slides];
+          // Insert after data.afterIndex if provided, otherwise append
+          const idx = data.afterIndex != null ? data.afterIndex + 1 : slides.length;
+          next = [...slides.slice(0, idx), ...data.slides, ...slides.slice(idx)];
           pushHistory(next);
+          setCurrentIndex(idx);
         }
         return;
+      }
       case 'update_slide':
         next = slides.map((s) => (s.id === data.slideId ? { ...s, ...data.slide } : s));
         pushHistory(next);
@@ -116,7 +120,7 @@ function useSlideManager() {
         next = slides.filter((s) => s.id !== data.slideId);
         if (next.length === 0) return;
         pushHistory(next);
-        setCurrentIndex((i) => Math.max(0, i - 1));
+        setCurrentIndex((i) => Math.min(i, next.length - 1));
         return;
       }
       default:

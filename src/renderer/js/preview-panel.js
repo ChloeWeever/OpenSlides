@@ -1,6 +1,233 @@
 // preview-panel.js — left pane: toolbar, slide viewport, thumbnail strip
 
 const TRANSITIONS = ['none', 'slide', 'fade', 'zoom'];
+const LAYOUTS = ['title', 'content', 'section', 'two-column', 'big-quote', 'blank'];
+const ELEMENT_TYPES = ['kicker','heading','subheading','body','divider','bullets','pills','quote','stats','cards'];
+
+let _slideIdCounter = Date.now();
+function newSlideId() { return `slide-${++_slideIdCounter}`; }
+function newElemId()  { return `el-${++_slideIdCounter}`; }
+
+function makeBlankSlide(background) {
+  return {
+    id: newSlideId(),
+    layout: 'content',
+    transition: 'slide',
+    background: background || '#0f0f1a',
+    elements: [
+      { type: 'kicker', text: 'NEW SLIDE' },
+      { type: 'heading', text: 'Slide Title', gradient: true },
+      { type: 'divider' },
+      { type: 'bullets', items: ['Point one', 'Point two'] },
+    ],
+  };
+}
+
+// ── Slide editor drawer ────────────────────────────────────────────────────────
+function SlideEditor({ slide, onClose, onUpdate, onPreview }) {
+  const [draft, setDraft] = React.useState(() => JSON.parse(JSON.stringify(slide)));
+
+  // Keep draft in sync when slide prop changes (e.g. navigating)
+  React.useEffect(() => {
+    const fresh = JSON.parse(JSON.stringify(slide));
+    setDraft(fresh);
+    onPreview(fresh);
+  }, [slide.id]);
+
+  // Push live preview on every draft change
+  React.useEffect(() => {
+    onPreview(draft);
+  }, [draft]);
+
+  const save = () => { onUpdate(draft); onClose(); };
+  const cancel = () => { onPreview(slide); onClose(); };
+
+  const update = (fn) => setDraft(d => fn(d));
+
+  const setLayout = (layout) => update(d => ({ ...d, layout }));
+  const setBg = (background) => update(d => ({ ...d, background }));
+
+  const setEl = (i, patch) => update(d => ({
+    ...d, elements: d.elements.map((e, idx) => idx === i ? { ...e, ...patch } : e),
+  }));
+
+  const delEl = (i) => update(d => ({ ...d, elements: d.elements.filter((_, idx) => idx !== i) }));
+
+  const moveEl = (i, dir) => update(d => {
+    const els = [...d.elements];
+    const j = i + dir;
+    if (j < 0 || j >= els.length) return d;
+    [els[i], els[j]] = [els[j], els[i]];
+    return { ...d, elements: els };
+  });
+
+  const addEl = (type) => {
+    const defaults = {
+      kicker:     { type: 'kicker', text: 'LABEL' },
+      heading:    { type: 'heading', text: 'Title', gradient: true },
+      subheading: { type: 'subheading', text: 'Subtitle' },
+      body:       { type: 'body', text: 'Paragraph text.' },
+      divider:    { type: 'divider' },
+      bullets:    { type: 'bullets', items: ['Item one', 'Item two'] },
+      pills:      { type: 'pills', items: ['Tag A', 'Tag B'] },
+      quote:      { type: 'quote', text: 'Quote text.', author: 'Author' },
+      stats:      { type: 'stats', items: [{ label: 'METRIC', value: '42', delta: '+10%' }] },
+      cards:      { type: 'cards', cols: 3, items: [{ icon: '⭐', title: 'Card', body: 'Description' }] },
+    };
+    update(d => ({ ...d, elements: [...d.elements, defaults[type] || { type }] }));
+  };
+
+  const inputCls = 'w-full bg-[#0f0f1a] border border-[#2a2a3a] rounded-lg px-3 py-1.5 text-xs text-[#cdd6f4] focus:outline-none focus:border-[#6366f1] resize-none';
+  const labelCls = 'text-[10px] text-[#4a4a6a] uppercase tracking-wider mb-1';
+
+  const renderElEditor = (el, i) => {
+    const hasText = ['kicker','heading','subheading','body','quote'].includes(el.type);
+    const hasList = ['bullets','pills'].includes(el.type);
+    return (
+      <div key={i} className="bg-[#1a1a2a] border border-[#2a2a3a] rounded-xl p-3 flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-medium text-[#6366f1] bg-[#6366f1]/10 px-2 py-0.5 rounded-full">{el.type}</span>
+          <div className="flex-1" />
+          <button onClick={() => moveEl(i, -1)} disabled={i === 0} className="w-5 h-5 flex items-center justify-center text-[#4a4a6a] hover:text-[#cdd6f4] disabled:opacity-30 text-xs">↑</button>
+          <button onClick={() => moveEl(i, 1)} disabled={i === draft.elements.length - 1} className="w-5 h-5 flex items-center justify-center text-[#4a4a6a] hover:text-[#cdd6f4] disabled:opacity-30 text-xs">↓</button>
+          <button onClick={() => delEl(i)} className="w-5 h-5 flex items-center justify-center text-[#4a4a6a] hover:text-[#f38ba8] text-xs">✕</button>
+        </div>
+
+        {hasText && (
+          <textarea
+            className={inputCls}
+            rows={el.type === 'body' ? 3 : 1}
+            value={el.text || ''}
+            onChange={e => setEl(i, { text: e.target.value })}
+          />
+        )}
+        {el.type === 'quote' && (
+          <input className={inputCls} value={el.author || ''} placeholder="Author"
+            onChange={e => setEl(i, { author: e.target.value })} />
+        )}
+        {el.type === 'heading' && (
+          <label className="flex items-center gap-2 text-xs text-[#8888a8] cursor-pointer">
+            <input type="checkbox" checked={!!el.gradient} onChange={e => setEl(i, { gradient: e.target.checked })} />
+            Gradient
+          </label>
+        )}
+        {hasList && (
+          <div className="flex flex-col gap-1">
+            {(el.items || []).map((item, j) => {
+              const val = typeof item === 'string' ? item : item.text || '';
+              return (
+                <div key={j} className="flex gap-1">
+                  <input className={inputCls + ' flex-1'} value={val}
+                    onChange={e => {
+                      const items = [...(el.items || [])];
+                      items[j] = typeof item === 'string' ? e.target.value : { ...item, text: e.target.value };
+                      setEl(i, { items });
+                    }}
+                  />
+                  <button onClick={() => {
+                    const items = (el.items || []).filter((_, k) => k !== j);
+                    setEl(i, { items });
+                  }} className="w-6 h-6 flex items-center justify-center text-[#4a4a6a] hover:text-[#f38ba8] text-xs flex-shrink-0">✕</button>
+                </div>
+              );
+            })}
+            <button onClick={() => setEl(i, { items: [...(el.items || []), 'New item'] })}
+              className="text-[10px] text-[#6366f1] hover:text-[#a5b4fc] text-left mt-0.5">+ Add item</button>
+          </div>
+        )}
+        {el.type === 'stats' && (
+          <div className="flex flex-col gap-1">
+            {(el.items || []).map((item, j) => (
+              <div key={j} className="flex gap-1">
+                <input className={inputCls + ' flex-1'} value={item.value || ''} placeholder="Value"
+                  onChange={e => { const items=[...el.items]; items[j]={...item,value:e.target.value}; setEl(i,{items}); }} />
+                <input className={inputCls + ' flex-1'} value={item.label || ''} placeholder="Label"
+                  onChange={e => { const items=[...el.items]; items[j]={...item,label:e.target.value}; setEl(i,{items}); }} />
+                <input className={inputCls + ' w-16'} value={item.delta || ''} placeholder="±"
+                  onChange={e => { const items=[...el.items]; items[j]={...item,delta:e.target.value}; setEl(i,{items}); }} />
+                <button onClick={() => setEl(i,{items:el.items.filter((_,k)=>k!==j)})} className="w-6 h-6 flex items-center justify-center text-[#4a4a6a] hover:text-[#f38ba8] text-xs flex-shrink-0">✕</button>
+              </div>
+            ))}
+            <button onClick={() => setEl(i,{items:[...(el.items||[]),{label:'METRIC',value:'0',delta:''}]})}
+              className="text-[10px] text-[#6366f1] hover:text-[#a5b4fc] text-left mt-0.5">+ Add stat</button>
+          </div>
+        )}
+        {el.type === 'cards' && (
+          <div className="flex flex-col gap-1">
+            {(el.items || []).map((item, j) => (
+              <div key={j} className="flex gap-1 items-start">
+                <input className={inputCls + ' w-10'} value={item.icon||''} placeholder="icon"
+                  onChange={e => { const items=[...el.items]; items[j]={...item,icon:e.target.value}; setEl(i,{items}); }} />
+                <input className={inputCls + ' flex-1'} value={item.title||''} placeholder="Title"
+                  onChange={e => { const items=[...el.items]; items[j]={...item,title:e.target.value}; setEl(i,{items}); }} />
+                <input className={inputCls + ' flex-1'} value={item.body||''} placeholder="Description"
+                  onChange={e => { const items=[...el.items]; items[j]={...item,body:e.target.value}; setEl(i,{items}); }} />
+                <button onClick={() => setEl(i,{items:el.items.filter((_,k)=>k!==j)})} className="w-6 h-6 flex items-center justify-center text-[#4a4a6a] hover:text-[#f38ba8] text-xs flex-shrink-0 mt-0.5">✕</button>
+              </div>
+            ))}
+            <button onClick={() => setEl(i,{items:[...(el.items||[]),{icon:'⭐',title:'Card',body:'Description'}]})}
+              className="text-[10px] text-[#6366f1] hover:text-[#a5b4fc] text-left mt-0.5">+ Add card</button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-[#13131f] border-l border-[#2a2a3a]">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-[#2a2a3a] flex-shrink-0">
+        <span className="text-xs font-medium text-[#cdd6f4]">Edit Slide</span>
+        <div className="flex-1" />
+        <button onClick={save} className="px-3 py-1 rounded-lg text-xs font-medium bg-[#6366f1] text-white hover:bg-[#5254cc]">Apply</button>
+        <button onClick={cancel} className="w-6 h-6 flex items-center justify-center text-[#4a4a6a] hover:text-white text-sm">✕</button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+        {/* Slide meta */}
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <div className={labelCls}>Layout</div>
+            <select value={draft.layout || 'content'} onChange={e => setLayout(e.target.value)}
+              className="w-full bg-[#0f0f1a] border border-[#2a2a3a] rounded-lg px-3 py-1.5 text-xs text-[#cdd6f4] focus:outline-none focus:border-[#6366f1]">
+              {LAYOUTS.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </div>
+          <div>
+            <div className={labelCls}>Background</div>
+            <div className="flex items-center gap-2">
+              <input type="color" value={draft.background || '#0f0f1a'} onChange={e => setBg(e.target.value)}
+                className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent p-0" />
+              <input className={inputCls + ' w-24'} value={draft.background || ''} placeholder="#0f0f1a"
+                onChange={e => setBg(e.target.value)} />
+            </div>
+          </div>
+        </div>
+
+        {/* Elements */}
+        <div>
+          <div className={labelCls}>Elements</div>
+          <div className="flex flex-col gap-2">
+            {draft.elements.map((el, i) => renderElEditor(el, i))}
+          </div>
+        </div>
+
+        {/* Add element */}
+        <div>
+          <div className={labelCls}>Add element</div>
+          <div className="flex flex-wrap gap-1.5">
+            {ELEMENT_TYPES.map(t => (
+              <button key={t} onClick={() => addEl(t)}
+                className="text-[10px] px-2.5 py-1 rounded-full bg-[#1c1c28] border border-[#2a2a3a] text-[#8888a8] hover:text-[#cdd6f4] hover:border-[#4a4a6a]">
+                + {t}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Colour themes ──────────────────────────────────────────────────────────────
 const THEMES = [
@@ -115,14 +342,15 @@ function ThumbnailSlide({ slide }) {
 }
 
 // ── Thumbnail strip with drag-to-reorder ──────────────────────────────────────
-function ThumbnailStrip({ slides, currentIndex, onGoTo, onReorder }) {
+function ThumbnailStrip({ slides, currentIndex, onGoTo, onReorder, onAdd, onDuplicate, onDelete }) {
   const dragFrom = React.useRef(null);
   const [dragOver, setDragOver] = React.useState(null);
+  const [ctxMenu, setCtxMenu] = React.useState(null); // { index, x, y }
+  const ctxRef = React.useRef(null);
 
   const handleDragStart = (e, i) => {
     dragFrom.current = i;
     e.dataTransfer.effectAllowed = 'move';
-    // Ghost image: use the element itself
     e.dataTransfer.setDragImage(e.currentTarget, 48, 32);
   };
 
@@ -145,8 +373,33 @@ function ThumbnailStrip({ slides, currentIndex, onGoTo, onReorder }) {
     dragFrom.current = null;
   };
 
+  const handleContextMenu = (e, i) => {
+    e.preventDefault();
+    setCtxMenu({ index: i, x: e.clientX, y: e.clientY });
+  };
+
+  // Clamp context menu inside viewport after it mounts
+  React.useLayoutEffect(() => {
+    if (!ctxMenu || !ctxRef.current) return;
+    const rect = ctxRef.current.getBoundingClientRect();
+    let { x, y } = ctxMenu;
+    if (y + rect.height > window.innerHeight - 8) y = window.innerHeight - rect.height - 8;
+    if (x + rect.width  > window.innerWidth  - 8) x = window.innerWidth  - rect.width  - 8;
+    if (x !== ctxMenu.x || y !== ctxMenu.y) setCtxMenu((m) => ({ ...m, x, y }));
+  }, [ctxMenu?.index, ctxMenu?.x, ctxMenu?.y]);
+
+  // Dismiss context menu on outside click
+  React.useEffect(() => {
+    if (!ctxMenu) return;
+    const handler = (e) => {
+      if (ctxRef.current && !ctxRef.current.contains(e.target)) setCtxMenu(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [ctxMenu]);
+
   return (
-    <div className="flex gap-2 px-4 pb-3 overflow-x-auto flex-shrink-0 border-t border-[#2a2a3a] pt-3">
+    <div className="flex items-end gap-2 px-4 pb-3 overflow-x-auto flex-shrink-0 border-t border-[#2a2a3a] pt-3">
       {slides.map((slide, i) => (
         <div
           key={slide.id || i}
@@ -155,10 +408,9 @@ function ThumbnailStrip({ slides, currentIndex, onGoTo, onReorder }) {
           onDragOver={(e) => handleDragOver(e, i)}
           onDrop={(e) => handleDrop(e, i)}
           onDragEnd={handleDragEnd}
+          onContextMenu={(e) => handleContextMenu(e, i)}
           style={{
-            outline: dragOver === i && dragFrom.current !== i
-              ? '2px solid #6366f1'
-              : 'none',
+            outline: dragOver === i && dragFrom.current !== i ? '2px solid #6366f1' : 'none',
             borderRadius: '6px',
             transition: 'outline 0.1s',
           }}
@@ -166,13 +418,43 @@ function ThumbnailStrip({ slides, currentIndex, onGoTo, onReorder }) {
           <button
             onClick={() => onGoTo(i)}
             className={`slide-thumb w-24 flex-shrink-0 no-drag ${i === currentIndex ? 'active' : ''}`}
-            title={`Slide ${i + 1} — drag to reorder`}
+            title={`Slide ${i + 1} — right-click for options`}
           >
             <ThumbnailSlide slide={slide} />
           </button>
           <div className="text-center text-[10px] text-[#4a4a6a] mt-0.5 select-none">{i + 1}</div>
         </div>
       ))}
+
+      {/* Add slide button */}
+      <button
+        onClick={() => onAdd(slides.length - 1)}
+        title="New slide"
+        className="w-24 flex-shrink-0 flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-[#2a2a3a] hover:border-[#6366f1] text-[#4a4a6a] hover:text-[#6366f1] transition-all"
+        style={{ aspectRatio: '16/9' }}
+      >
+        <span className="text-lg leading-none">+</span>
+      </button>
+
+      {/* Context menu */}
+      {ctxMenu && (
+        <div
+          ref={ctxRef}
+          className="fixed z-50 bg-[#1c1c28] border border-[#2a2a3a] rounded-xl shadow-2xl py-1 overflow-hidden"
+          style={{ left: ctxMenu.x, top: ctxMenu.y, minWidth: 160 }}
+        >
+          {[
+            { label: 'New slide after', action: () => { onAdd(ctxMenu.index); setCtxMenu(null); } },
+            { label: 'Duplicate', action: () => { onDuplicate(ctxMenu.index); setCtxMenu(null); } },
+            { label: 'Delete', action: () => { onDelete(ctxMenu.index); setCtxMenu(null); }, danger: true },
+          ].map(item => (
+            <button key={item.label} onClick={item.action}
+              className={`block w-full text-left px-4 py-2 text-sm transition-colors ${item.danger ? 'text-[#f38ba8] hover:bg-[#f38ba8]/10' : 'text-[#cdd6f4] hover:bg-[#2a2a3a]'}`}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -483,7 +765,7 @@ function ImageTray({ slide, onApplyAction }) {
 }
 
 // ── PreviewPanel ──────────────────────────────────────────────────────────────
-function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, onPrev, onGoTo, onReorder, onApplyAction, onSave, onElementSelected, canUndo, canRedo, onUndo, onRedo }) {
+function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, onPrev, onGoTo, onReorder, onApplyAction, onSave, onElementSelected, canUndo, canRedo, onUndo, onRedo, showEditor, onOpenEditor, onCloseEditor, onRegisterPreview }) {
   const iframeRef = React.useRef(null);
   const viewportContainerRef = React.useRef(null);
   const [viewportSize, setViewportSize] = React.useState({ width: 0, height: 0 });
@@ -496,6 +778,40 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
   const [uploadingImage, setUploadingImage] = React.useState(false);
   const imagePickerRef = React.useRef(null);
   const themePickerRef = React.useRef(null);
+
+  // Add new blank slide after afterIndex
+  const handleAddSlide = React.useCallback((afterIndex) => {
+    const bg = currentSlide?.background || '#0f0f1a';
+    const newSlide = makeBlankSlide(bg);
+    if (currentSlide?.themeVars) newSlide.themeVars = currentSlide.themeVars;
+    if (currentSlide?.color) newSlide.color = currentSlide.color;
+    onApplyAction({ action: 'add_slides', slides: [newSlide], afterIndex });
+  }, [currentSlide, onApplyAction]);
+
+  // Duplicate slide at index
+  const handleDuplicateSlide = React.useCallback((index) => {
+    const src = slides[index];
+    const copy = { ...JSON.parse(JSON.stringify(src)), id: newSlideId() };
+    onApplyAction({ action: 'add_slides', slides: [copy], afterIndex: index });
+  }, [slides, onApplyAction]);
+
+  // Delete slide at index
+  const handleDeleteSlide = React.useCallback((index) => {
+    if (slides.length <= 1) return;
+    onApplyAction({ action: 'delete_slide', slideId: slides[index].id });
+  }, [slides, onApplyAction]);
+
+  // Live preview: send draft directly to iframe without touching history
+  const handlePreviewSlide = React.useCallback((previewSlide) => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    iframe.contentWindow?.postMessage({ type: 'render', slide: previewSlide, direction: 'none' }, '*');
+  }, []);
+
+  // Register the preview callback with parent so SlideEditor (in App) can call it
+  React.useEffect(() => {
+    onRegisterPreview?.(handlePreviewSlide);
+  }, [handlePreviewSlide, onRegisterPreview]);
 
   // Apply a theme to all slides
   const applyTheme = React.useCallback((theme) => {
@@ -734,6 +1050,15 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
           )}
         </div>
 
+        {/* Edit slide button */}
+        <button
+          onClick={() => showEditor ? onCloseEditor() : onOpenEditor()}
+          title="Edit current slide"
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-all ${showEditor ? 'bg-[#6366f1] text-white border-[#6366f1]' : 'text-[#8888a8] hover:text-white hover:bg-[#2a2a3a] border-[#2a2a3a]'}`}
+        >
+          ✎ Edit
+        </button>
+
         {/* Present button */}
         <button
           onClick={() => setFullscreen(true)}
@@ -798,6 +1123,9 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
         currentIndex={currentIndex}
         onGoTo={onGoTo}
         onReorder={onReorder}
+        onAdd={handleAddSlide}
+        onDuplicate={handleDuplicateSlide}
+        onDelete={handleDeleteSlide}
       />
     </div>
   );

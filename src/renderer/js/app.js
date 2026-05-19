@@ -35,6 +35,8 @@ function App() {
     modelName: 'gpt-4o',
   });
   const [selectedElement, setSelectedElement] = React.useState(null);
+  const [showEditor, setShowEditor] = React.useState(false);
+  const previewSlideRef = React.useRef(null); // holds the handlePreviewSlide fn from PreviewPanel
 
   // Session state
   const [sessions, setSessions] = React.useState([]);
@@ -258,20 +260,41 @@ function App() {
             canRedo={slideManager.canRedo}
             onUndo={slideManager.undo}
             onRedo={slideManager.redo}
+            showEditor={showEditor}
+            onOpenEditor={() => setShowEditor(true)}
+            onCloseEditor={() => {
+              previewSlideRef.current?.(slideManager.currentSlide);
+              setShowEditor(false);
+            }}
+            onRegisterPreview={(fn) => { previewSlideRef.current = fn; }}
           />
         </div>
         <div className="flex-[2] min-w-0 overflow-hidden" style={{ minWidth: 320, maxWidth: 480 }}>
-          <ChatPanel
-            slides={slideManager.slides}
-            currentSlide={slideManager.currentSlide}
-            onApplyAction={slideManager.applyAction}
-            settings={settings}
-            selectedElement={selectedElement}
-            onClearSelection={() => setSelectedElement(null)}
-            messages={messages}
-            setMessages={setMessages}
-            onNewSession={handleNewSession}
-          />
+          {showEditor ? (
+            <SlideEditor
+              slide={slideManager.currentSlide}
+              onClose={() => {
+                previewSlideRef.current?.(slideManager.currentSlide);
+                setShowEditor(false);
+              }}
+              onUpdate={(updatedSlide) => {
+                slideManager.applyAction({ action: 'update_slide', slideId: updatedSlide.id, slide: updatedSlide });
+              }}
+              onPreview={(draft) => previewSlideRef.current?.(draft)}
+            />
+          ) : (
+            <ChatPanel
+              slides={slideManager.slides}
+              currentSlide={slideManager.currentSlide}
+              onApplyAction={slideManager.applyAction}
+              settings={settings}
+              selectedElement={selectedElement}
+              onClearSelection={() => setSelectedElement(null)}
+              messages={messages}
+              setMessages={setMessages}
+              onNewSession={handleNewSession}
+            />
+          )}
         </div>
       </div>
 
