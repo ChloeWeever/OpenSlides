@@ -648,25 +648,22 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
 
   const W = 1920, H = 1080;
 
-  // Single offscreen window, single page load for all slides
   const offscreen = new BrowserWindow({
     width: W, height: H,
     x: -W - 100, y: 0,
     frame: false, skipTaskbar: true,
-    webPreferences: { contextIsolation: true, deviceScaleFactor: 1 },
+    webPreferences: { contextIsolation: true, javascript: true },
   });
   offscreen.showInactive();
 
   try {
-    // Build one HTML containing every slide; show only one at a time
-    const html = buildAllSlidesHTML(slides, W, H);
+    const html = buildPrintableHTML(slides, W, H);
     const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
 
-    // Wait for page load + diagram init signal
     await new Promise((resolve, reject) => {
       let settled = false;
-      const onConsole = (_e, _level, message) => {
-        if (message === '__ready__' && !settled) { settled = true; cleanup(); resolve(); }
+      const onConsole = (_e, _level, msg) => {
+        if (msg === '__ready__' && !settled) { settled = true; cleanup(); resolve(); }
       };
       const onLoad = () => {
         if (!settled) setTimeout(() => { if (!settled) { settled = true; cleanup(); resolve(); } }, 300);
@@ -683,50 +680,13 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
       offscreen.loadURL(dataUrl);
     });
 
-    // Capture each slide by showing it and screenshotting
-    const jpegs = [];
-    for (let i = 0; i < slides.length; i++) {
-      const slide = slides[i];
-      if (slide.soloHtml) {
-        // Solo slide: open a dedicated offscreen window, load the full HTML document,
-        // wait for did-finish-load, then capturePage — same approach as template slides.
-        const soloWin = new BrowserWindow({
-          width: W, height: H,
-          x: -W - 100, y: 0,
-          frame: false, skipTaskbar: true,
-          webPreferences: { contextIsolation: true, deviceScaleFactor: 1 },
-        });
-        soloWin.showInactive();
-        try {
-          await new Promise((resolve, reject) => {
-            let settled = false;
-            const done = () => { if (!settled) { settled = true; resolve(); } };
-            soloWin.webContents.once('did-finish-load', () => setTimeout(done, 120));
-            soloWin.webContents.once('did-fail-load', (_, code, desc) => reject(new Error(desc || 'solo load failed')));
-            setTimeout(() => reject(new Error('solo slide load timeout')), 10000);
-            soloWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(slide.soloHtml));
-          });
-          const image = await soloWin.webContents.capturePage({ x: 0, y: 0, width: W, height: H });
-          jpegs.push(image.toJPEG(92));
-        } finally {
-          soloWin.destroy();
-        }
-      } else {
-        await offscreen.webContents.executeJavaScript(`
-          document.querySelectorAll('.slide-page').forEach(function(el, j) {
-            el.style.display = j === ${i} ? 'flex' : 'none';
-          });
-        `);
-        await offscreen.webContents.executeJavaScript(
-          'new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); })'
-        );
-        const image = await offscreen.webContents.capturePage({ x: 0, y: 0, width: W, height: H });
-        jpegs.push(image.toJPEG(92));
-      }
-    }
-
-    const pdfBytes = buildPDFFromJPEGs(jpegs, W, H);
-    fs.writeFileSync(filePath, pdfBytes);
+    // printToPDF: each .slide-page is exactly W×H px, @page sets paper to match
+    const pdfBuf = await offscreen.webContents.printToPDF({
+      printBackground: true,
+      pageSize: { width: W * 1000 / 96, height: H * 1000 / 96 }, // microns at 96dpi
+      margins: { marginType: 'none' },
+    });
+    fs.writeFileSync(filePath, pdfBuf);
     return { success: true, filePath };
   } catch (err) {
     return { success: false, error: err.message };
@@ -735,36 +695,15 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
   }
 });
 
-// Render a single slide as a full-page HTML
-function buildSingleSlideHTML(slide, w, h) {
-  const bg = slide.background || '#1e1e2e';
-  const color = slide.color || '#cdd6f4';
-  const layout = slide.layout || 'content';
-  const inner = renderElements(slide.elements, layout, slide.sectionNum);
-  const tv = themeVarsStyle(slide.themeVars);
-  const style = `background:${bg};color:${color}${tv ? ';' + tv : ''}`;
-  return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"/>
-<style>
-${SLIDE_CSS}
-html,body{margin:0;padding:0;width:${w}px;height:${h}px;overflow:hidden;}
-.slide-container{position:absolute;inset:0;}
-</style></head>
-<body>
-<div class="slide-container layout-${layout}" style="${style}">${inner}</div>
-${_chartJS ? `<script>${_chartJS}</script>` : ''}
-${_diagramRendererJS ? `<script>${_diagramRendererJS}\n${DIAGRAM_INIT_JS}</script>` : ''}
-</body>
-</html>`;
-}
-
-// Single HTML with all slides — used by PDF export to avoid reloading per slide
-function buildAllSlidesHTML(slides, w, h) {
-  const pages = slides.map((s, i) => {
-    const display = `display:${i === 0 ? 'flex' : 'none'};position:absolute;inset:0;`;
+// Vertical printable HTML — one .slide-page div per slide, each exactly W×H px.
+// Solo slides embed their HTML via an inline <iframe> sized to the page.
+// @page removes all margins so printToPDF outputs clean slides.
+function buildPrintableHTML(slides, w, h) {
+  const logo = store.get('logo', null);
+  const pages = slides.map((s) => {
     if (s.soloHtml) {
       const escaped = s.soloHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-      return `<div class="slide-page" style="${display}">`
+      return `<div class="slide-page">`
         + `<iframe srcdoc="${escaped}" style="width:${w}px;height:${h}px;border:none;display:block;" sandbox="allow-scripts allow-same-origin"></iframe>`
         + `</div>`;
     }
@@ -773,13 +712,13 @@ function buildAllSlidesHTML(slides, w, h) {
     const layout = s.layout || 'content';
     const inner = renderElements(s.elements, layout, s.sectionNum);
     const tv = themeVarsStyle(s.themeVars);
-    const style = `background:${bg};color:${color}${tv ? ';' + tv : ''}`;
-    return `<div class="slide-page" style="${display}">`
-      + `<div class="slide-container layout-${layout}" style="${style}">${inner}</div>`
+    const style = `background:${bg};color:${color}${tv ? ';'+tv : ''}`;
+    const logoHtml = (logo?.enabled && logo?.dataUrl) ? buildLogoHtml(logo) : '';
+    return `<div class="slide-page">`
+      + `<div class="slide-container layout-${layout}" style="${style}">${inner}${logoHtml}</div>`
       + `</div>`;
   }).join('\n');
 
-  // DIAGRAM_INIT_JS already ends with console.log('__ready__')
   const diagScript = _diagramRendererJS
     ? `<script>${_diagramRendererJS}\n${DIAGRAM_INIT_JS}</script>`
     : `<script>console.log('__ready__');</script>`;
@@ -787,8 +726,19 @@ function buildAllSlidesHTML(slides, w, h) {
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"/>
 <style>
+@page { size: ${w}px ${h}px; margin: 0; }
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; width: ${w}px; background: #000; }
 ${SLIDE_CSS}
-html,body{margin:0;padding:0;width:${w}px;height:${h}px;overflow:hidden;background:#000;}
+.slide-page {
+  width: ${w}px;
+  height: ${h}px;
+  position: relative;
+  overflow: hidden;
+  page-break-after: always;
+  break-after: page;
+}
+.slide-page .slide-container { position: absolute; inset: 0; }
 </style></head>
 <body>
 ${pages}
@@ -796,98 +746,4 @@ ${_chartJS ? `<script>${_chartJS}</script>` : ''}
 ${diagScript}
 </body>
 </html>`;
-}
-
-// Read actual pixel dimensions from a JPEG buffer (SOF marker)
-function jpegDimensions(buf) {
-  let i = 2;
-  while (i < buf.length) {
-    if (buf[i] !== 0xff) break;
-    const marker = buf[i + 1];
-    const segLen = buf.readUInt16BE(i + 2);
-    // SOF markers: 0xC0–0xC3, 0xC5–0xC7, 0xC9–0xCB, 0xCD–0xCF
-    if ((marker >= 0xc0 && marker <= 0xc3) || (marker >= 0xc5 && marker <= 0xc7) ||
-        (marker >= 0xc9 && marker <= 0xcb) || (marker >= 0xcd && marker <= 0xcf)) {
-      return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
-    }
-    i += 2 + segLen;
-  }
-  return null;
-}
-
-// Minimal pure-JS PDF builder — embeds each JPEG as a full-page image
-function buildPDFFromJPEGs(jpegs, w, h) {
-  // PDF page size in points — use 16:9 at 72 dpi (presentation standard)
-  const pw = Math.round(w * 72 / 96);  // 1440
-  const ph = Math.round(h * 72 / 96);  // 810
-
-  const parts = [];
-  const offsets = [];
-
-  const add = (str) => parts.push(Buffer.isBuffer(str) ? str : Buffer.from(str, 'latin1'));
-  const pos = () => parts.reduce((s, b) => s + b.length, 0);
-
-  add('%PDF-1.4\n');
-
-  const imageObjNums = [];
-  const pageObjNums = [];
-  const catalogObjNum = 1;
-  const pagesObjNum = 2;
-  let nextObj = 3;
-
-  // Write image + page objects for each slide
-  for (let i = 0; i < jpegs.length; i++) {
-    const imgNum = nextObj++;
-    const pageNum = nextObj++;
-    imageObjNums.push(imgNum);
-    pageObjNums.push(pageNum);
-
-    // Read actual pixel dimensions from JPEG — capturePage on HiDPI returns 2x pixels
-    const imgData = jpegs[i];
-    const dims = jpegDimensions(imgData);
-    const iw = dims ? dims.w : w;
-    const ih = dims ? dims.h : h;
-
-    // Image object
-    offsets[imgNum] = pos();
-    add(`${imgNum} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${iw} /Height ${ih} `
-      + `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imgData.length} >>\nstream\n`);
-    add(imgData);
-    add('\nendstream\nendobj\n');
-
-    // Page object
-    offsets[pageNum] = pos();
-    add(`${pageNum} 0 obj\n`
-      + `<< /Type /Page /Parent ${pagesObjNum} 0 R /MediaBox [0 0 ${pw} ${ph}] `
-      + `/Resources << /XObject << /Im${i} ${imgNum} 0 R >> >> `
-      + `/Contents ${pageNum + 1} 0 R >>\nendobj\n`);
-
-    // Content stream: draw image filling the page
-    const contentNum = nextObj++;
-    const stream = `q ${pw} 0 0 ${ph} 0 0 cm /Im${i} Do Q`;
-    offsets[contentNum] = pos();
-    add(`${contentNum} 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`);
-  }
-
-  // Catalog
-  offsets[catalogObjNum] = pos();
-  add(`${catalogObjNum} 0 obj\n<< /Type /Catalog /Pages ${pagesObjNum} 0 R >>\nendobj\n`);
-
-  // Pages
-  offsets[pagesObjNum] = pos();
-  add(`${pagesObjNum} 0 obj\n<< /Type /Pages /Kids [`
-    + pageObjNums.map(n => `${n} 0 R`).join(' ')
-    + `] /Count ${pageObjNums.length} >>\nendobj\n`);
-
-  // xref
-  const xrefPos = pos();
-  const totalObjs = nextObj;
-  add(`xref\n0 ${totalObjs}\n`);
-  add('0000000000 65535 f \n');
-  for (let i = 1; i < totalObjs; i++) {
-    add(String(offsets[i] || 0).padStart(10, '0') + ' 00000 n \n');
-  }
-  add(`trailer\n<< /Size ${totalObjs} /Root ${catalogObjNum} 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`);
-
-  return Buffer.concat(parts);
 }
