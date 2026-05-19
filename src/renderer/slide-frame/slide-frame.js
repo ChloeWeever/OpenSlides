@@ -827,8 +827,8 @@ function showSlideSimple(slide, direction) {
   }
 
   // No transition: render directly into current
-  // Also skip animation if re-rendering the same slide (e.g. triggered by parent resize)
-  if (!currentSlide || !slide.transition || slide.transition === 'none' || currentSlide?.id === slide.id) {
+  // Also skip animation if re-rendering the same slide, or direction is 'none' (programmatic load)
+  if (!currentSlide || !slide.transition || slide.transition === 'none' || direction === 'none' || currentSlide?.id === slide.id) {
     renderSlide(current, slide);
     current.classList.remove('hidden');
     currentSlide = slide;
