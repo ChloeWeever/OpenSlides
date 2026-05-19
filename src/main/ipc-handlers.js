@@ -4,6 +4,46 @@ const { callLLM, parseJSONResponse } = require('./llm-client');
 const path = require('path');
 const fs = require('fs');
 
+// Load diagram renderer assets once at startup (used in HTML/PDF export)
+const SLIDE_FRAME_DIR = path.join(__dirname, '../renderer/slide-frame');
+let _chartJS = '';
+let _diagramRendererJS = '';
+try {
+  _chartJS = fs.readFileSync(path.join(SLIDE_FRAME_DIR, 'chart.min.js'), 'utf8');
+  const slideFrameSrc = fs.readFileSync(path.join(SLIDE_FRAME_DIR, 'slide-frame.js'), 'utf8');
+  // Extract CHART_PALETTE + renderDiagram/renderChartJS/renderFlow/renderMindmap
+  const start = slideFrameSrc.indexOf('// ── Diagram renderers');
+  const end   = slideFrameSrc.indexOf('\n// ─────────────────────', start);
+  _diagramRendererJS = start >= 0 ? slideFrameSrc.slice(start, end) : '';
+} catch (e) {
+  console.warn('Could not load diagram renderer assets:', e.message);
+}
+
+// Glue script for exported HTML: reads data-diagram attrs and initialises diagrams
+const DIAGRAM_INIT_JS = `
+(function() {
+  var themeColors = { text1:'#cdd6f4', text2:'#a6adc8', text3:'#6c7086', accent:'#89b4fa', border:'rgba(255,255,255,.08)' };
+  function resolveThemeColors(container) {
+    var cs = getComputedStyle(container);
+    var get = function(v, fb) { return cs.getPropertyValue(v).trim() || fb; };
+    themeColors = {
+      text1:  get('--text-1','#cdd6f4'),
+      text2:  get('--text-2','#a6adc8'),
+      text3:  get('--text-3','#6c7086'),
+      accent: get('--accent','#89b4fa'),
+      border: get('--border','rgba(255,255,255,.08)'),
+    };
+  }
+  document.querySelectorAll('.el-diagram[data-diagram]').forEach(function(el) {
+    try {
+      var spec = JSON.parse(el.getAttribute('data-diagram'));
+      resolveThemeColors(el.closest('.slide-container') || el);
+      renderDiagram(el, spec);
+    } catch(e) { console.warn('diagram init error', e); }
+  });
+})();
+`;
+
 const SYSTEM_PROMPT = `You are an AI presentation assistant. You create beautiful, modern slides using a rich design system.
 
 Respond ONLY with valid JSON in one of these formats:
@@ -352,7 +392,7 @@ function renderElements(elements, layout, sectionNum) {
         return `<div class="el-cards cols-${Math.min(cols,4)}">${cards}</div>`;
       }
       case 'diagram':
-        return `<div class="el-diagram">${buildStaticSVG(el)}</div>`;
+        return `<div class="el-diagram" data-diagram='${JSON.stringify(el).replace(/'/g, '&#39;')}'></div>`;
       default: return '';
     }
   };
@@ -440,155 +480,7 @@ body{font-family:'Inter','Noto Sans SC',system-ui,sans-serif;-webkit-font-smooth
 .el-diagram svg{max-width:100%;max-height:45%;}
 `;
 
-const STATIC_PALETTE = ['#89b4fa','#cba6f7','#f38ba8','#a6e3a1','#f9e2af','#fab387','#94e2d5'];
 
-// Build a static SVG representation of a diagram for HTML export
-function buildStaticSVG(el) {
-  if (!el || el.kind === 'svg') return el.svgHtml || '';
-
-  if (el.kind === 'bar') {
-    const datasets = el.datasets || [];
-    const labels = el.labels || [];
-    const data = datasets[0]?.data || [];
-    const max = Math.max(...data, 1);
-    const W = 600, H = 320, padL = 48, padB = 40, padT = 30, padR = 20;
-    const bw = Math.max(20, Math.floor((W - padL - padR) / (labels.length || 1) - 8));
-    const bars = data.map((v, i) => {
-      const barH = Math.round(((H - padT - padB) * v) / max);
-      const x = padL + i * ((W - padL - padR) / labels.length) + 4;
-      const y = H - padB - barH;
-      const color = datasets[0]?.color || STATIC_PALETTE[i % STATIC_PALETTE.length];
-      const label = labels[i] || '';
-      return `<rect x="${x}" y="${y}" width="${bw}" height="${barH}" rx="4" fill="${color}" opacity="0.85"/>
-<text x="${x + bw/2}" y="${H - padB + 16}" text-anchor="middle" fill="var(--text-2,#a6adc8)" font-size="11">${label}</text>`;
-    }).join('');
-    const title = el.title ? `<text x="${W/2}" y="20" text-anchor="middle" fill="var(--text-1,#cdd6f4)" font-size="14" font-weight="600">${el.title}</text>` : '';
-    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;max-height:45%;">${title}${bars}</svg>`;
-  }
-
-  if (el.kind === 'pie' || el.kind === 'doughnut') {
-    const datasets = el.datasets || [];
-    const labels = el.labels || [];
-    const data = (datasets[0]?.data || []);
-    const total = data.reduce((s, v) => s + v, 0) || 1;
-    const cx = 150, cy = 150, r = 120, ri = el.kind === 'doughnut' ? 60 : 0;
-    let angle = -Math.PI / 2;
-    const slices = data.map((v, i) => {
-      const sa = angle, ea = angle + (v / total) * 2 * Math.PI;
-      angle = ea;
-      const x1 = cx + r * Math.cos(sa), y1 = cy + r * Math.sin(sa);
-      const x2 = cx + r * Math.cos(ea), y2 = cy + r * Math.sin(ea);
-      const large = (v / total) > 0.5 ? 1 : 0;
-      const color = STATIC_PALETTE[i % STATIC_PALETTE.length];
-      const mid = (sa + ea) / 2, lr = r * 0.65;
-      const lx = cx + lr * Math.cos(mid), ly = cy + lr * Math.sin(mid);
-      const pct = Math.round(v / total * 100);
-      const inner = ri > 0
-        ? `M${cx+ri*Math.cos(sa)},${cy+ri*Math.sin(sa)} A${ri},${ri} 0 ${large} 0 ${cx+ri*Math.cos(ea)},${cy+ri*Math.sin(ea)} Z`
-        : `M${cx},${cy}`;
-      return `<path d="M${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} L${cx},${cy} Z" fill="${color}" opacity="0.9"/>
-<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="11" font-weight="600">${pct}%</text>`;
-    }).join('');
-    const legend = labels.map((l, i) => {
-      const color = STATIC_PALETTE[i % STATIC_PALETTE.length];
-      return `<rect x="310" y="${30 + i * 22}" width="12" height="12" rx="2" fill="${color}"/>
-<text x="328" y="${40 + i * 22}" fill="var(--text-2,#a6adc8)" font-size="12">${l}</text>`;
-    }).join('');
-    const title = el.title ? `<text x="150" y="${cy + r + 24}" text-anchor="middle" fill="var(--text-1,#cdd6f4)" font-size="13" font-weight="600">${el.title}</text>` : '';
-    return `<svg viewBox="0 0 480 330" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;max-height:45%;">${slices}${legend}${title}</svg>`;
-  }
-
-  if (el.kind === 'line') {
-    const datasets = el.datasets || [];
-    const labels = el.labels || [];
-    const W = 600, H = 320, padL = 48, padB = 40, padT = 30, padR = 20;
-    const allData = datasets.flatMap(d => d.data || []);
-    const max = Math.max(...allData, 1), min = Math.min(...allData, 0);
-    const lines = datasets.map((d, di) => {
-      const data = d.data || [];
-      const color = d.color || STATIC_PALETTE[di % STATIC_PALETTE.length];
-      const pts = data.map((v, i) => {
-        const x = padL + (i / Math.max(data.length - 1, 1)) * (W - padL - padR);
-        const y = H - padB - ((v - min) / (max - min || 1)) * (H - padT - padB);
-        return `${x},${y}`;
-      }).join(' ');
-      return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/>`;
-    }).join('');
-    const axisLabels = labels.map((l, i) => {
-      const x = padL + (i / Math.max(labels.length - 1, 1)) * (W - padL - padR);
-      return `<text x="${x}" y="${H - padB + 16}" text-anchor="middle" fill="var(--text-2,#a6adc8)" font-size="11">${l}</text>`;
-    }).join('');
-    const title = el.title ? `<text x="${W/2}" y="20" text-anchor="middle" fill="var(--text-1,#cdd6f4)" font-size="14" font-weight="600">${el.title}</text>` : '';
-    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;max-height:45%;">${title}${lines}${axisLabels}</svg>`;
-  }
-
-  if (el.kind === 'flow') {
-    const nodes = el.nodes || [], edges = el.edges || [];
-    const depth = {}, adj = {};
-    nodes.forEach(n => { depth[n.id] = -1; adj[n.id] = []; });
-    edges.forEach(e => { if (adj[e.from]) adj[e.from].push(e.to); });
-    const roots = nodes.filter(n => !edges.some(e => e.to === n.id)).map(n => n.id);
-    if (!roots.length && nodes.length) roots.push(nodes[0].id);
-    const queue = [...roots];
-    roots.forEach(r => { depth[r] = 0; });
-    while (queue.length) {
-      const id = queue.shift();
-      (adj[id]||[]).forEach(nid => { if (depth[nid] < depth[id]+1) { depth[nid]=depth[id]+1; queue.push(nid); } });
-    }
-    nodes.forEach(n => { if (depth[n.id] < 0) depth[n.id] = 0; });
-    const cols = {};
-    nodes.forEach(n => { const d=depth[n.id]; if(!cols[d])cols[d]=[]; cols[d].push(n.id); });
-    const numCols=Object.keys(cols).length, NW=130, NH=44, HG=90, VG=22;
-    const maxPer=Math.max(...Object.values(cols).map(a=>a.length));
-    const svgW=numCols*NW+(numCols-1)*HG+40, svgH=maxPer*NH+(maxPer-1)*VG+40;
-    const pos={};
-    Object.entries(cols).forEach(([d,ids])=>{
-      const ch=ids.length*NH+(ids.length-1)*VG, sy=(svgH-ch)/2;
-      ids.forEach((id,i)=>{ pos[id]={x:20+Number(d)*(NW+HG),y:sy+i*(NH+VG)}; });
-    });
-    const edgeSvg=edges.map(e=>{ const f=pos[e.from],t=pos[e.to]; if(!f||!t)return '';
-      return `<line x1="${f.x+NW}" y1="${f.y+NH/2}" x2="${t.x}" y2="${t.y+NH/2}" stroke="var(--accent,#89b4fa)" stroke-width="1.5" stroke-opacity="0.6" marker-end="url(#arr)"/>`; }).join('');
-    const nodeSvg=nodes.map(n=>{ const p=pos[n.id]; if(!p)return '';
-      return `<rect x="${p.x}" y="${p.y}" width="${NW}" height="${NH}" rx="7" fill="var(--surface,rgba(137,180,250,.12))" stroke="var(--accent,#89b4fa)" stroke-width="1.5"/>
-<text x="${p.x+NW/2}" y="${p.y+NH/2+1}" text-anchor="middle" dominant-baseline="middle" fill="var(--text-1,#cdd6f4)" font-size="12">${escHtml(n.label||n.id)}</text>`; }).join('');
-    return `<svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;max-height:45%;">
-<defs><marker id="arr" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="var(--accent,#89b4fa)" opacity="0.8"/></marker></defs>
-${edgeSvg}${nodeSvg}</svg>`;
-  }
-
-  if (el.kind === 'mindmap') {
-    const root = el.root || 'Topic', children = el.children || [];
-    const W=700,H=500,CX=W/2,CY=H/2;
-    function countLeaves(n){return(!n.children||!n.children.length)?1:n.children.reduce((s,c)=>s+countLeaves(c),0);}
-    const total=children.reduce((s,c)=>s+countLeaves(c),0)||1;
-    const makeNode=(x,y,label,isRoot,ci)=>{
-      const color=STATIC_PALETTE[ci%STATIC_PALETTE.length];
-      const bw=Math.max(label.length*7+(isRoot?36:24),isRoot?80:60),bh=isRoot?36:28;
-      return `<rect x="${x-bw/2}" y="${y-bh/2}" width="${bw}" height="${bh}" rx="${isRoot?10:7}" fill="${isRoot?'var(--surface,rgba(137,180,250,.2))':color+'22'}" stroke="${isRoot?'var(--accent,#89b4fa)':color}" stroke-width="${isRoot?2:1.5}"/>
-<text x="${x}" y="${y+1}" text-anchor="middle" dominant-baseline="middle" fill="var(--text-1,#cdd6f4)" font-size="${isRoot?13:11}" font-weight="${isRoot?700:500}">${escHtml(label)}</text>`;
-    };
-    const makeEdge=(x1,y1,x2,y2,color)=>`<path d="M${x1},${y1} C${(x1+x2)/2},${y1} ${(x1+x2)/2},${y2} ${x2},${y2}" fill="none" stroke="${color}" stroke-width="1.5" stroke-opacity="0.5"/>`;
-    let cursor=0, nodes=makeNode(CX,CY,root,true,0), edges='';
-    children.forEach((child,ci)=>{
-      const leaves=countLeaves(child), mid=cursor+leaves/2;
-      const angle=((mid/total)*2*Math.PI)-Math.PI/2;
-      const r1=160,cx2=CX+r1*Math.cos(angle),cy2=CY+r1*Math.sin(angle);
-      const color=STATIC_PALETTE[ci%STATIC_PALETTE.length];
-      edges+=makeEdge(CX,CY,cx2,cy2,color);
-      nodes+=makeNode(cx2,cy2,child.label||'',false,ci);
-      (child.children||[]).forEach((gc,gci)=>{
-        const sub=child.children.length, subA=angle+((gci-(sub-1)/2)*0.35);
-        const r2=110,gcx=cx2+r2*Math.cos(subA),gcy=cy2+r2*Math.sin(subA);
-        edges+=makeEdge(cx2,cy2,gcx,gcy,color);
-        nodes+=makeNode(gcx,gcy,gc.label||'',false,ci);
-      });
-      cursor+=leaves;
-    });
-    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;max-height:45%;">${edges}${nodes}</svg>`;
-  }
-
-  return '';
-}
 
 function themeVarsStyle(tv) {
   if (!tv) return '';
@@ -691,6 +583,8 @@ document.addEventListener('click',function(e){
 });
 show(0);resetHide();
 </script>
+${_chartJS ? `<script>${_chartJS}</script>` : ''}
+${_diagramRendererJS ? `<script>${_diagramRendererJS}\n${DIAGRAM_INIT_JS}</script>` : ''}
 </body>
 </html>`;
 }
@@ -751,8 +645,8 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
         offscreen.loadFile(tmpPath);
       });
 
-      // Wait for paint
-      await new Promise(r => setTimeout(r, 300));
+      // Wait for paint and diagram JS to render
+      await new Promise(r => setTimeout(r, 600));
 
       const image = await offscreen.webContents.capturePage({ x: 0, y: 0, width: W, height: H });
       jpegs.push(image.toJPEG(92));
@@ -785,7 +679,11 @@ ${SLIDE_CSS}
 html,body{margin:0;padding:0;width:${w}px;height:${h}px;overflow:hidden;}
 .slide-container{position:absolute;inset:0;}
 </style></head>
-<body><div class="slide-container layout-${layout}" style="${style}">${inner}</div></body>
+<body>
+<div class="slide-container layout-${layout}" style="${style}">${inner}</div>
+${_chartJS ? `<script>${_chartJS}</script>` : ''}
+${_diagramRendererJS ? `<script>${_diagramRendererJS}\n${DIAGRAM_INIT_JS}</script>` : ''}
+</body>
 </html>`;
 }
 
