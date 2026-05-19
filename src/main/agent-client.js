@@ -50,17 +50,22 @@ const SLIDE_GEN_SYSTEM = `You are a presentation slide designer. Use the generat
 - Do NOT use placeholder text like "Description here" or "Your content"
 - Call generate_slide ONCE with the complete slide object`;
 
-const SOLO_SLIDE_SYSTEM = `You are a world-class presentation designer. Output ONE complete slide as a self-contained HTML document.
+const SOLO_SLIDE_SYSTEM = `You are a presentation designer. Output ONE slide as a self-contained HTML document.
 
-Rules for the HTML:
-- Must be a complete <!DOCTYPE html> document
-- Use ONLY inline CSS — no external stylesheets, no CDN links, no @import
-- Slide canvas: body { margin:0; padding:0; width:1920px; height:1080px; overflow:hidden; }
-- Design guidelines: bold typography, generous whitespace, strong color contrast
-- You may freely use SVG elements, CSS gradients, CSS shapes, CSS animations
-- Do NOT use any JavaScript
-- Keep CSS concise — avoid redundant rules, use shorthand properties
-- Output ONLY the raw HTML — no markdown fences, no explanation, no commentary`;
+STRICT RULES:
+- Complete <!DOCTYPE html> document
+- ONLY inline CSS — no external stylesheets, no CDN, no @import
+- body { margin:0; padding:0; width:1920px; height:1080px; overflow:hidden; }
+- NO JavaScript
+- Output ONLY raw HTML — no markdown fences, no explanation
+
+CONCISENESS — your output MUST fit in ~3000 tokens:
+- Use CSS shorthand aggressively (font: bold 64px/1.2 Arial)
+- Combine selectors where possible; avoid redundant properties
+- Prefer SVG over complex CSS shapes
+- No comments in the HTML/CSS
+- Limit total element count — a clean slide needs 5–15 elements, not 50
+- Avoid long repeated inline style blocks; group shared styles in a <style> tag in <head>`;
 
 // ── Tool definitions ──────────────────────────────────────────────────────────
 
@@ -268,7 +273,7 @@ Output the complete HTML document now.`;
 
   // Solo HTML is plain text output — no tool binding needed (avoids LiteLLM large-arg issues)
   // Each call is a fresh 2-message session (system + user) — no context accumulation between slides.
-  const llm = buildPlainModel(settings, 16000);
+  const llm = buildPlainModel(settings, 32000);
   const systemSize = SOLO_SLIDE_SYSTEM.length;
   const promptSize = userPrompt.length;
   log.info(`  prompt sizes: system=${systemSize} chars, user=${promptSize} chars (~${Math.round((systemSize + promptSize) / 4)} tokens est.)`);
