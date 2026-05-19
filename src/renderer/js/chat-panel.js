@@ -35,57 +35,65 @@ function Message({ msg }) {
 
 function GenerationProgress({ outline, currentStep, done, error }) {
   if (!outline) return null;
+  const [collapsed, setCollapsed] = React.useState(false);
   return (
     <div className="mx-4 mb-3 rounded-xl overflow-hidden" style={{background:'var(--ui-bg-4)',border:'1px solid var(--ui-border)'}}>
-      <div className="px-3 py-2 flex items-center gap-2" style={{borderBottom:'1px solid var(--ui-border)'}}>
-        <div className={`w-2 h-2 rounded-full ${done ? 'bg-[#a6e3a1]' : 'animate-pulse'}`}
+      <div className="px-3 py-2 flex items-center gap-2 cursor-pointer select-none"
+        style={{borderBottom: collapsed ? 'none' : '1px solid var(--ui-border)'}}
+        onClick={() => setCollapsed(c => !c)}>
+        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${done ? 'bg-[#a6e3a1]' : 'animate-pulse'}`}
           style={!done ? {background:'var(--ui-primary)'} : {}} />
-        <span className="text-xs font-medium ui-text-2">
+        <span className="text-xs font-medium ui-text-2 flex-1">
           {done ? t('genComplete') : t('genSlide', currentStep, outline.length)}
         </span>
-        {error && <span className="text-xs text-[#f38ba8] ml-auto truncate">{error}</span>}
+        {error && <span className="text-xs text-[#f38ba8] truncate max-w-[40%]">{error}</span>}
+        <span className="text-[10px] ui-text-4 flex-shrink-0 ml-1">{collapsed ? '▸' : '▾'}</span>
       </div>
-      <div className="p-2 flex flex-col gap-1">
-        {outline.map((s, i) => {
-          const state = i < currentStep - 1 ? 'done' : i === currentStep - 1 ? 'active' : 'pending';
-          return (
-            <div key={s.id} className={`flex flex-col px-2 py-1.5 rounded-lg text-xs transition-colors`}
-              style={state === 'active' ? {background:'rgba(208,64,0,0.12)'} : {}}>
-              <div className="flex items-center gap-2">
-                <span className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
-                  style={
-                    state === 'done'   ? {background:'#a6e3a1',color:'#000'} :
-                    state === 'active' ? {background:'var(--ui-primary)',color:'#fff'} :
-                                         {background:'var(--ui-bg-5)',color:'var(--ui-text-4)'}
-                  }>
-                  {state === 'done' ? '✓' : i + 1}
-                </span>
-                <span className={`truncate flex-1 font-medium ${state === 'pending' ? 'ui-text-4' : 'ui-text-2'}`}>
-                  {s.title}
-                </span>
-                {s.layout && <span className="flex-shrink-0 text-[9px] ui-text-4">[{s.layout}]</span>}
-              </div>
-              {state !== 'pending' && (s.kicker || s.contentType || s.notes) && (
-                <div className="ml-6 mt-0.5 text-[10px] leading-snug ui-text-3">
-                  {s.kicker && <span className="mr-1" style={{color:'var(--ui-primary)'}}>{s.kicker}</span>}
-                  {s.contentType && <span className="opacity-60">[{s.contentType}]</span>}
-                  {s.notes && !s.kicker && <span className="opacity-60 truncate">{s.notes.slice(0, 60)}</span>}
+      {!collapsed && (
+        <>
+          <div className="p-2 flex flex-col gap-1">
+            {outline.map((s, i) => {
+              const state = i < currentStep - 1 ? 'done' : i === currentStep - 1 ? 'active' : 'pending';
+              return (
+                <div key={s.id} className={`flex flex-col px-2 py-1.5 rounded-lg text-xs transition-colors`}
+                  style={state === 'active' ? {background:'rgba(208,64,0,0.12)'} : {}}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
+                      style={
+                        state === 'done'   ? {background:'#a6e3a1',color:'#000'} :
+                        state === 'active' ? {background:'var(--ui-primary)',color:'#fff'} :
+                                             {background:'var(--ui-bg-5)',color:'var(--ui-text-4)'}
+                      }>
+                      {state === 'done' ? '✓' : i + 1}
+                    </span>
+                    <span className={`truncate flex-1 font-medium ${state === 'pending' ? 'ui-text-4' : 'ui-text-2'}`}>
+                      {s.title}
+                    </span>
+                    {s.layout && <span className="flex-shrink-0 text-[9px] ui-text-4">[{s.layout}]</span>}
+                  </div>
+                  {state !== 'pending' && (s.kicker || s.contentType || s.notes) && (
+                    <div className="ml-6 mt-0.5 text-[10px] leading-snug ui-text-3">
+                      {s.kicker && <span className="mr-1" style={{color:'var(--ui-primary)'}}>{s.kicker}</span>}
+                      {s.contentType && <span className="opacity-60">[{s.contentType}]</span>}
+                      {s.notes && !s.kicker && <span className="opacity-60 truncate">{s.notes.slice(0, 60)}</span>}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      {/* Progress bar */}
-      <div className="h-1" style={{background:'var(--ui-border)'}}>
-        <div
-          className="h-full transition-all duration-500"
-          style={{
-            background: 'var(--ui-primary)',
-            width: `${done ? 100 : Math.round(((currentStep - 1) / outline.length) * 100)}%`,
-          }}
-        />
-      </div>
+              );
+            })}
+          </div>
+          {/* Progress bar */}
+          <div className="h-1" style={{background:'var(--ui-border)'}}>
+            <div
+              className="h-full transition-all duration-500"
+              style={{
+                background: 'var(--ui-primary)',
+                width: `${done ? 100 : Math.round(((currentStep - 1) / outline.length) * 100)}%`,
+              }}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }
