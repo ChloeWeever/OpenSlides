@@ -535,7 +535,7 @@ function ImageTray({ slide, onApplyAction }) {
 function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, onPrev, onGoTo, onReorder, onApplyAction, onSave, onElementSelected, canUndo, canRedo, onUndo, onRedo, showEditor, onOpenEditor, onCloseEditor, onRegisterPreview, lang }) {
   const iframeRef = React.useRef(null);
   const viewportContainerRef = React.useRef(null);
-  const [viewportSize, setViewportSize] = React.useState({ width: 0, height: 0 });
+  const [viewportSize, setViewportSize] = React.useState(null);
   const [selectedTransition, setSelectedTransition] = React.useState(currentSlide?.transition || 'slide');
   const [showTransitions, setShowTransitions] = React.useState(false);
   const [showThemes, setShowThemes] = React.useState(false);
@@ -809,7 +809,9 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
       <div ref={viewportContainerRef} className="flex-1 flex items-center justify-center overflow-hidden">
         <iframe ref={iframeRef} className="slide-viewport" src="slide-frame/slide-frame.html" title="Slide Preview"
           sandbox="allow-scripts allow-same-origin"
-          style={viewportSize.width > 0 ? { width: viewportSize.width, height: viewportSize.height } : { width: '100%', aspectRatio: '16/9' }}
+          style={viewportSize
+            ? { width: viewportSize.width, height: viewportSize.height }
+            : { width: '100%', aspectRatio: '16/9', visibility: 'hidden' }}
         />
       </div>
 
