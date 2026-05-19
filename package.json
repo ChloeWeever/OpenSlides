@@ -11,7 +11,8 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^29.0.0"
+    "electron": "^29.0.0",
+    "sharp": "^0.34.5"
   },
   "dependencies": {
     "chart.js": "^4.5.1",

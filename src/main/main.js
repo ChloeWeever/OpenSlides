@@ -10,12 +10,13 @@ function createWindow() {
     height: 900,
     minWidth: 1024,
     minHeight: 600,
+    icon: path.join(__dirname, '../assets/icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
-    backgroundColor: '#0f0f0f',
+    backgroundColor: '#f3f3f3',
     show: false,
   });
 
