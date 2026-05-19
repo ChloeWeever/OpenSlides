@@ -4,6 +4,7 @@ const { callLLM, parseJSONResponse } = require('./llm-client');
 const { genSlideWithAgent, genSoloSlideWithAgent } = require('./agent-client');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 // Load diagram renderer assets once at startup (used in HTML/PDF export)
 const SLIDE_FRAME_DIR = path.join(__dirname, '../renderer/slide-frame');
@@ -647,9 +648,10 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
   if (canceled || !filePath) return { success: false };
 
   const W = 1920, H = 1080;
+  const tmpHtml = path.join(os.tmpdir(), `openslides-pdf-${Date.now()}.html`);
 
   const offscreen = new BrowserWindow({
-    width: W, height: H,
+    width: W, height: H * slides.length,
     x: -W - 100, y: 0,
     frame: false, skipTaskbar: true,
     webPreferences: { contextIsolation: true, javascript: true },
@@ -658,7 +660,7 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
 
   try {
     const html = buildPrintableHTML(slides, W, H);
-    const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+    fs.writeFileSync(tmpHtml, html, 'utf8');
 
     await new Promise((resolve, reject) => {
       let settled = false;
@@ -666,7 +668,7 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
         if (msg === '__ready__' && !settled) { settled = true; cleanup(); resolve(); }
       };
       const onLoad = () => {
-        if (!settled) setTimeout(() => { if (!settled) { settled = true; cleanup(); resolve(); } }, 300);
+        if (!settled) setTimeout(() => { if (!settled) { settled = true; cleanup(); resolve(); } }, 500);
       };
       const onFail = (_, code, desc) => { cleanup(); reject(new Error(desc || 'load failed')); };
       function cleanup() {
@@ -677,10 +679,15 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
       offscreen.webContents.on('console-message', onConsole);
       offscreen.webContents.once('did-finish-load', onLoad);
       offscreen.webContents.once('did-fail-load', onFail);
-      offscreen.loadURL(dataUrl);
+      offscreen.loadFile(tmpHtml);
     });
 
-    // printToPDF: pageSize in microns (px ÷ 96 × 25.4 × 1000)
+    // Extra tick so background/font rendering finishes
+    await offscreen.webContents.executeJavaScript(
+      'new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); })'
+    );
+
+    // pageSize in microns: px ÷ 96 × 25.4 × 1000
     const pdfBuf = await offscreen.webContents.printToPDF({
       printBackground: true,
       pageSize: { width: Math.round(W / 96 * 25.4 * 1000), height: Math.round(H / 96 * 25.4 * 1000) },
@@ -692,6 +699,8 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
     return { success: false, error: err.message };
   } finally {
     offscreen.destroy();
+    try { fs.unlinkSync(tmpHtml); } catch (_) {}
+  }
   }
 });
 
