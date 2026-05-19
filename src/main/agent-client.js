@@ -267,8 +267,12 @@ This is slide ${slideIndex + 1} of ${totalSlides}
 Output the complete HTML document now.`;
 
   // Solo HTML is plain text output — no tool binding needed (avoids LiteLLM large-arg issues)
+  // Each call is a fresh 2-message session (system + user) — no context accumulation between slides.
   const llm = buildPlainModel(settings, 16000);
-  log.info(`  invokeWithTool: calling model for plain HTML...`);
+  const systemSize = SOLO_SLIDE_SYSTEM.length;
+  const promptSize = userPrompt.length;
+  log.info(`  prompt sizes: system=${systemSize} chars, user=${promptSize} chars (~${Math.round((systemSize + promptSize) / 4)} tokens est.)`);
+  log.info(`  calling model...`);
 
   let response;
   try {
