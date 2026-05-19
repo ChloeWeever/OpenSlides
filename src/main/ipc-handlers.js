@@ -369,63 +369,74 @@ function renderElements(elements, layout, sectionNum) {
   return sectionNumHtml + (elements||[]).map(renderEl).join('');
 }
 
-// Inline CSS with fixed px fonts (no clamp/vw) so it works at any viewport size
+// Shared CSS for HTML/PDF export — uses CSS variables so themes are respected
 const SLIDE_CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;}
+:root{
+  --accent:#89b4fa;--accent-2:#cba6f7;--accent-3:#f38ba8;
+  --grad:linear-gradient(135deg,#89b4fa,#cba6f7 55%,#f38ba8);
+  --grad-soft:linear-gradient(135deg,rgba(137,180,250,.15),rgba(203,166,247,.12) 55%,rgba(243,139,168,.1));
+  --surface:rgba(137,180,250,.08);--surface-2:rgba(203,166,247,.08);
+  --border:rgba(255,255,255,.08);
+  --text-1:#cdd6f4;--text-2:#a6adc8;--text-3:#6c7086;
+  --good:#a6e3a1;--bad:#f38ba8;--radius:14px;
+}
+body{font-family:'Inter','Noto Sans SC',system-ui,sans-serif;-webkit-font-smoothing:antialiased;color:var(--text-1);}
 .slide-container{
   width:100%;height:100%;
   display:flex;flex-direction:column;
   justify-content:center;align-items:center;
-  padding:60px 80px;overflow:hidden;gap:0;
+  padding:56px 80px;overflow:hidden;gap:0;
 }
 .layout-title{text-align:center;align-items:center;gap:20px;}
-.layout-content{align-items:flex-start;gap:24px;}
+.layout-content{align-items:flex-start;gap:22px;}
 .layout-section{text-align:center;align-items:center;justify-content:center;gap:16px;}
-.layout-two-column{flex-direction:row;align-items:flex-start;gap:60px;}
-.layout-two-column .col{flex:1;display:flex;flex-direction:column;gap:20px;min-width:0;}
+.layout-two-column{flex-direction:row;align-items:flex-start;gap:56px;}
+.layout-two-column .col{flex:1;display:flex;flex-direction:column;gap:18px;min-width:0;}
 .layout-big-quote{text-align:center;align-items:center;justify-content:center;gap:24px;padding:64px 120px;}
 .layout-blank{align-items:flex-start;gap:20px;}
-.el-kicker{font-size:14px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#89b4fa;opacity:0.9;}
-.el-heading{font-size:72px;font-weight:800;line-height:1.05;letter-spacing:-0.03em;}
-.el-subheading{font-size:38px;font-weight:300;line-height:1.5;opacity:0.8;}
-.el-body{font-size:26px;line-height:1.75;opacity:0.8;max-width:80ch;}
-.el-bullets{list-style:none;display:flex;flex-direction:column;gap:14px;width:100%;}
-.el-bullets li{font-size:26px;line-height:1.5;padding-left:1.6em;position:relative;}
-.el-bullets li::before{content:'▸';position:absolute;left:0;color:#89b4fa;opacity:0.8;}
+.el-kicker{font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);opacity:0.9;}
+.el-heading{font-size:clamp(36px,6vw,72px);font-weight:800;line-height:1.05;letter-spacing:-0.03em;color:var(--text-1);}
+.el-heading.gradient{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+.el-subheading{font-size:clamp(18px,2.4vw,30px);font-weight:300;line-height:1.5;color:var(--text-2);}
+.el-body{font-size:clamp(15px,1.7vw,20px);line-height:1.75;color:var(--text-2);max-width:80ch;}
+.el-bullets{list-style:none;display:flex;flex-direction:column;gap:10px;width:100%;align-self:flex-start;}
+.el-bullets li{font-size:clamp(14px,1.7vw,20px);line-height:1.55;color:var(--text-1);padding-left:1.6em;position:relative;}
+.el-bullets li::before{content:'▸';position:absolute;left:0;color:var(--accent);opacity:0.8;}
 .el-image-wrap{max-width:100%;}
-.el-image{max-width:100%;object-fit:contain;border-radius:14px;display:block;}
-.el-image-caption{font-size:13px;opacity:0.5;text-align:center;margin-top:6px;font-style:italic;}
+.el-image{max-width:100%;object-fit:contain;border-radius:var(--radius);display:block;}
+.el-image-caption{font-size:11px;color:var(--text-3);text-align:center;margin-top:6px;font-style:italic;}
 .el-images-grid{display:grid;width:100%;align-self:stretch;}
 .el-images-grid-item{display:flex;flex-direction:column;gap:4px;min-width:0;}
 .el-images-grid-item .el-image{max-height:none;width:100%;}
-.el-divider{height:3px;width:56px;background:#89b4fa;border-radius:2px;align-self:flex-start;}
+.el-divider{height:3px;width:56px;background:var(--accent);border-radius:2px;align-self:flex-start;}
 .layout-title .el-divider,.layout-section .el-divider,.layout-big-quote .el-divider{align-self:center;}
 .el-pills{display:flex;flex-wrap:wrap;gap:8px;align-self:flex-start;}
 .layout-title .el-pills{align-self:center;}
-.el-pill{display:inline-flex;align-items:center;padding:4px 14px;border-radius:999px;font-size:14px;font-weight:500;background:rgba(255,255,255,.07);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.12);}
-.el-pill.accent{background:rgba(137,180,250,.15);color:#89b4fa;border-color:rgba(137,180,250,.35);}
+.el-pill{display:inline-flex;align-items:center;padding:4px 14px;border-radius:999px;font-size:12px;font-weight:500;background:var(--surface-2);color:var(--text-2);border:1px solid var(--border);}
+.el-pill.accent{background:var(--surface);color:var(--accent);border-color:var(--accent);}
 .el-cards{display:grid;gap:16px;width:100%;align-self:stretch;}
 .el-cards.cols-2{grid-template-columns:repeat(2,1fr);}
 .el-cards.cols-3{grid-template-columns:repeat(3,1fr);}
 .el-cards.cols-4{grid-template-columns:repeat(4,1fr);}
-.el-card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:24px 26px;display:flex;flex-direction:column;gap:10px;}
-.el-card-accent{border-top:3px solid #89b4fa;}
-.el-card .card-icon{font-size:28px;margin-bottom:4px;}
-.el-card .card-title{font-size:22px;font-weight:600;letter-spacing:-0.01em;}
-.el-card .card-body{font-size:18px;opacity:0.7;line-height:1.6;}
-.el-stats{display:flex;gap:40px;align-self:flex-start;width:100%;}
+.el-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;display:flex;flex-direction:column;gap:8px;}
+.el-card-accent{border-top:3px solid var(--accent);}
+.el-card .card-icon{font-size:24px;margin-bottom:4px;}
+.el-card .card-title{font-size:clamp(14px,1.6vw,18px);font-weight:600;color:var(--text-1);letter-spacing:-0.01em;}
+.el-card .card-body{font-size:clamp(12px,1.3vw,15px);color:var(--text-2);line-height:1.6;}
+.el-stats{display:flex;gap:32px;align-self:flex-start;width:100%;}
 .el-stat{display:flex;flex-direction:column;gap:4px;}
-.el-stat .stat-label{font-size:14px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;opacity:0.5;}
-.el-stat .stat-value{font-size:64px;font-weight:800;line-height:1;letter-spacing:-0.03em;}
-.el-stat .stat-delta{font-size:15px;font-weight:500;color:#a6e3a1;}
-.el-stat .stat-delta.down{color:#f38ba8;}
-.el-quote{font-size:44px;font-weight:400;font-style:italic;line-height:1.45;text-align:center;max-width:75ch;position:relative;}
-.el-quote::before{content:'\\201C';font-size:5em;line-height:0;vertical-align:-.45em;color:#89b4fa;opacity:0.5;margin-right:0.1em;}
-.el-quote-author{font-size:16px;font-weight:500;letter-spacing:.06em;opacity:0.5;text-transform:uppercase;text-align:center;}
-.el-section-num{font-size:180px;font-weight:900;line-height:1;opacity:0.15;position:absolute;top:50%;left:50%;transform:translate(-50%,-54%);pointer-events:none;user-select:none;}
+.el-stat .stat-label{font-size:12px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);}
+.el-stat .stat-value{font-size:clamp(36px,5vw,60px);font-weight:800;line-height:1;letter-spacing:-0.03em;color:var(--text-1);}
+.el-stat .stat-delta{font-size:13px;font-weight:500;color:var(--good);}
+.el-stat .stat-delta.down{color:var(--bad);}
+.el-quote{font-size:clamp(22px,3.5vw,44px);font-weight:400;font-style:italic;line-height:1.45;color:var(--text-1);text-align:center;max-width:75ch;position:relative;}
+.el-quote::before{content:'\\201C';font-size:5em;line-height:0;vertical-align:-.45em;color:var(--accent);opacity:0.5;margin-right:0.1em;}
+.el-quote-author{font-size:clamp(13px,1.4vw,16px);font-weight:500;letter-spacing:.06em;color:var(--text-3);text-transform:uppercase;text-align:center;}
+.el-section-num{font-size:clamp(80px,14vw,160px);font-weight:900;line-height:1;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;opacity:0.25;position:absolute;top:50%;left:50%;transform:translate(-50%,-54%);pointer-events:none;user-select:none;}
 .layout-section>:not(.el-section-num){position:relative;z-index:1;}
-.el-diagram{width:100%;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;border-radius:14px;overflow:hidden;}
+.el-diagram{width:100%;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;border-radius:var(--radius);overflow:hidden;}
 .el-diagram svg{max-width:100%;max-height:45%;}
 `;
 
@@ -449,9 +460,9 @@ function buildStaticSVG(el) {
       const color = datasets[0]?.color || STATIC_PALETTE[i % STATIC_PALETTE.length];
       const label = labels[i] || '';
       return `<rect x="${x}" y="${y}" width="${bw}" height="${barH}" rx="4" fill="${color}" opacity="0.85"/>
-<text x="${x + bw/2}" y="${H - padB + 16}" text-anchor="middle" fill="#a6adc8" font-size="11">${label}</text>`;
+<text x="${x + bw/2}" y="${H - padB + 16}" text-anchor="middle" fill="var(--text-2,#a6adc8)" font-size="11">${label}</text>`;
     }).join('');
-    const title = el.title ? `<text x="${W/2}" y="20" text-anchor="middle" fill="#cdd6f4" font-size="14" font-weight="600">${el.title}</text>` : '';
+    const title = el.title ? `<text x="${W/2}" y="20" text-anchor="middle" fill="var(--text-1,#cdd6f4)" font-size="14" font-weight="600">${el.title}</text>` : '';
     return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;max-height:45%;">${title}${bars}</svg>`;
   }
 
@@ -481,9 +492,9 @@ function buildStaticSVG(el) {
     const legend = labels.map((l, i) => {
       const color = STATIC_PALETTE[i % STATIC_PALETTE.length];
       return `<rect x="310" y="${30 + i * 22}" width="12" height="12" rx="2" fill="${color}"/>
-<text x="328" y="${40 + i * 22}" fill="#a6adc8" font-size="12">${l}</text>`;
+<text x="328" y="${40 + i * 22}" fill="var(--text-2,#a6adc8)" font-size="12">${l}</text>`;
     }).join('');
-    const title = el.title ? `<text x="150" y="${cy + r + 24}" text-anchor="middle" fill="#cdd6f4" font-size="13" font-weight="600">${el.title}</text>` : '';
+    const title = el.title ? `<text x="150" y="${cy + r + 24}" text-anchor="middle" fill="var(--text-1,#cdd6f4)" font-size="13" font-weight="600">${el.title}</text>` : '';
     return `<svg viewBox="0 0 480 330" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;max-height:45%;">${slices}${legend}${title}</svg>`;
   }
 
@@ -505,9 +516,9 @@ function buildStaticSVG(el) {
     }).join('');
     const axisLabels = labels.map((l, i) => {
       const x = padL + (i / Math.max(labels.length - 1, 1)) * (W - padL - padR);
-      return `<text x="${x}" y="${H - padB + 16}" text-anchor="middle" fill="#a6adc8" font-size="11">${l}</text>`;
+      return `<text x="${x}" y="${H - padB + 16}" text-anchor="middle" fill="var(--text-2,#a6adc8)" font-size="11">${l}</text>`;
     }).join('');
-    const title = el.title ? `<text x="${W/2}" y="20" text-anchor="middle" fill="#cdd6f4" font-size="14" font-weight="600">${el.title}</text>` : '';
+    const title = el.title ? `<text x="${W/2}" y="20" text-anchor="middle" fill="var(--text-1,#cdd6f4)" font-size="14" font-weight="600">${el.title}</text>` : '';
     return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;max-height:45%;">${title}${lines}${axisLabels}</svg>`;
   }
 
@@ -536,12 +547,12 @@ function buildStaticSVG(el) {
       ids.forEach((id,i)=>{ pos[id]={x:20+Number(d)*(NW+HG),y:sy+i*(NH+VG)}; });
     });
     const edgeSvg=edges.map(e=>{ const f=pos[e.from],t=pos[e.to]; if(!f||!t)return '';
-      return `<line x1="${f.x+NW}" y1="${f.y+NH/2}" x2="${t.x}" y2="${t.y+NH/2}" stroke="#89b4fa" stroke-width="1.5" stroke-opacity="0.6" marker-end="url(#arr)"/>`; }).join('');
+      return `<line x1="${f.x+NW}" y1="${f.y+NH/2}" x2="${t.x}" y2="${t.y+NH/2}" stroke="var(--accent,#89b4fa)" stroke-width="1.5" stroke-opacity="0.6" marker-end="url(#arr)"/>`; }).join('');
     const nodeSvg=nodes.map(n=>{ const p=pos[n.id]; if(!p)return '';
-      return `<rect x="${p.x}" y="${p.y}" width="${NW}" height="${NH}" rx="7" fill="rgba(137,180,250,.12)" stroke="#89b4fa" stroke-width="1.5"/>
-<text x="${p.x+NW/2}" y="${p.y+NH/2+1}" text-anchor="middle" dominant-baseline="middle" fill="#cdd6f4" font-size="12">${escHtml(n.label||n.id)}</text>`; }).join('');
+      return `<rect x="${p.x}" y="${p.y}" width="${NW}" height="${NH}" rx="7" fill="var(--surface,rgba(137,180,250,.12))" stroke="var(--accent,#89b4fa)" stroke-width="1.5"/>
+<text x="${p.x+NW/2}" y="${p.y+NH/2+1}" text-anchor="middle" dominant-baseline="middle" fill="var(--text-1,#cdd6f4)" font-size="12">${escHtml(n.label||n.id)}</text>`; }).join('');
     return `<svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;max-height:45%;">
-<defs><marker id="arr" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#89b4fa" opacity="0.8"/></marker></defs>
+<defs><marker id="arr" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="var(--accent,#89b4fa)" opacity="0.8"/></marker></defs>
 ${edgeSvg}${nodeSvg}</svg>`;
   }
 
@@ -553,8 +564,8 @@ ${edgeSvg}${nodeSvg}</svg>`;
     const makeNode=(x,y,label,isRoot,ci)=>{
       const color=STATIC_PALETTE[ci%STATIC_PALETTE.length];
       const bw=Math.max(label.length*7+(isRoot?36:24),isRoot?80:60),bh=isRoot?36:28;
-      return `<rect x="${x-bw/2}" y="${y-bh/2}" width="${bw}" height="${bh}" rx="${isRoot?10:7}" fill="${isRoot?'rgba(137,180,250,.2)':color+'22'}" stroke="${isRoot?'#89b4fa':color}" stroke-width="${isRoot?2:1.5}"/>
-<text x="${x}" y="${y+1}" text-anchor="middle" dominant-baseline="middle" fill="#cdd6f4" font-size="${isRoot?13:11}" font-weight="${isRoot?700:500}">${escHtml(label)}</text>`;
+      return `<rect x="${x-bw/2}" y="${y-bh/2}" width="${bw}" height="${bh}" rx="${isRoot?10:7}" fill="${isRoot?'var(--surface,rgba(137,180,250,.2))':color+'22'}" stroke="${isRoot?'var(--accent,#89b4fa)':color}" stroke-width="${isRoot?2:1.5}"/>
+<text x="${x}" y="${y+1}" text-anchor="middle" dominant-baseline="middle" fill="var(--text-1,#cdd6f4)" font-size="${isRoot?13:11}" font-weight="${isRoot?700:500}">${escHtml(label)}</text>`;
     };
     const makeEdge=(x1,y1,x2,y2,color)=>`<path d="M${x1},${y1} C${(x1+x2)/2},${y1} ${(x1+x2)/2},${y2} ${x2},${y2}" fill="none" stroke="${color}" stroke-width="1.5" stroke-opacity="0.5"/>`;
     let cursor=0, nodes=makeNode(CX,CY,root,true,0), edges='';
@@ -579,13 +590,9 @@ ${edgeSvg}${nodeSvg}</svg>`;
   return '';
 }
 
-function buildSlideDiv(slide, extraClass) {
-  const bg = slide.background || '#1e1e2e';
-  const color = slide.color || '#cdd6f4';
-  const layout = slide.layout || 'content';
-  const inner = renderElements(slide.elements, layout, slide.sectionNum);
-  const tv = slide.themeVars;
-  const tvStyle = tv ? [
+function themeVarsStyle(tv) {
+  if (!tv) return '';
+  return [
     tv.accent    ? `--accent:${tv.accent}`     : '',
     tv.accent2   ? `--accent-2:${tv.accent2}`  : '',
     tv.accent3   ? `--accent-3:${tv.accent3}`  : '',
@@ -597,8 +604,16 @@ function buildSlideDiv(slide, extraClass) {
     tv.text1     ? `--text-1:${tv.text1}`       : '',
     tv.text2     ? `--text-2:${tv.text2}`       : '',
     tv.text3     ? `--text-3:${tv.text3}`       : '',
-  ].filter(Boolean).join(';') : '';
-  const style = `background:${bg};color:${color}${tvStyle ? ';' + tvStyle : ''}`;
+  ].filter(Boolean).join(';');
+}
+
+function buildSlideDiv(slide, extraClass) {
+  const bg = slide.background || '#1e1e2e';
+  const color = slide.color || '#cdd6f4';
+  const layout = slide.layout || 'content';
+  const inner = renderElements(slide.elements, layout, slide.sectionNum);
+  const tv = themeVarsStyle(slide.themeVars);
+  const style = `background:${bg};color:${color}${tv ? ';' + tv : ''}`;
   return `<div class="slide-container layout-${layout}${extraClass?' '+extraClass:''}" style="${style}">${inner}</div>`;
 }
 
@@ -761,6 +776,8 @@ function buildSingleSlideHTML(slide, w, h) {
   const color = slide.color || '#cdd6f4';
   const layout = slide.layout || 'content';
   const inner = renderElements(slide.elements, layout, slide.sectionNum);
+  const tv = themeVarsStyle(slide.themeVars);
+  const style = `background:${bg};color:${color}${tv ? ';' + tv : ''}`;
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"/>
 <style>
@@ -768,7 +785,7 @@ ${SLIDE_CSS}
 html,body{margin:0;padding:0;width:${w}px;height:${h}px;overflow:hidden;}
 .slide-container{position:absolute;inset:0;}
 </style></head>
-<body><div class="slide-container layout-${layout}" style="background:${bg};color:${color}">${inner}</div></body>
+<body><div class="slide-container layout-${layout}" style="${style}">${inner}</div></body>
 </html>`;
 }
 
