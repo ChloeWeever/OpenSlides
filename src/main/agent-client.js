@@ -110,12 +110,18 @@ function buildChatModel(settings, tools, maxTokens = 8192) {
   }
 
   // openai / litellm
-  const baseUrl = (settings.baseUrl || 'https://api.openai.com').replace(/\/$/, '');
+  // Only override baseURL for non-default endpoints (LiteLLM or custom proxy)
+  const defaultOpenAI = /^https?:\/\/api\.openai\.com\/?$/i.test(settings.baseUrl || '');
+  const baseUrl = (settings.baseUrl || '').replace(/\/$/, '');
+  const configuration = defaultOpenAI || !baseUrl
+    ? {}
+    : { baseURL: baseUrl.endsWith('/v1') ? baseUrl : baseUrl + '/v1' };
+
   const model = new ChatOpenAI({
     apiKey: settings.apiKey,
     model: settings.modelName || 'gpt-4o',
     maxTokens,
-    configuration: { baseURL: baseUrl + '/v1' },
+    ...(Object.keys(configuration).length ? { configuration } : {}),
   });
   return model.bindTools(tools);
 }
