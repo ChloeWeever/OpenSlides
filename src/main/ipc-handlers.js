@@ -33,7 +33,13 @@ Respond ONLY with valid JSON in one of these formats:
 {"type":"bullets","items":["Point one","Point two","Point three"]}
 {"type":"divider"}
 {"type":"pills","items":["Tag A","Tag B",{"text":"Accent","accent":true}]}
-{"type":"image","src":"https://...","alt":"description"}
+{"type":"image","src":"https://...","alt":"description",
+  "width":"60%","height":"300px","align":"center","float":"left",
+  "objectFit":"cover","radius":12,"caption":"Figure 1"}
+{"type":"images","cols":3,"gap":16,"height":200,"objectFit":"cover","radius":8,"items":[
+  {"src":"https://...","alt":"...","caption":"optional"},
+  {"src":"https://...","alt":"..."}
+]}
 {"type":"quote","text":"Inspiring words here.","author":"Name, Title"}
 {"type":"stats","items":[
   {"label":"METRIC","value":"42K","delta":"+12%"},
@@ -43,10 +49,16 @@ Respond ONLY with valid JSON in one of these formats:
   {"icon":"🚀","title":"Card Title","body":"Card description","accent":true},
   {"icon":"💡","title":"Card Title","body":"Card description"}
 ]}
+{"type":"diagram","kind":"bar","title":"Sales Q1","labels":["Jan","Feb","Mar"],"datasets":[{"label":"Revenue","data":[120,180,90],"color":"#89b4fa"}]}
+{"type":"diagram","kind":"line","title":"Growth Trend","labels":["Q1","Q2","Q3","Q4"],"datasets":[{"label":"Users","data":[100,150,210,280]}]}
+{"type":"diagram","kind":"pie","title":"Market Share","labels":["Product A","Product B","Product C"],"datasets":[{"data":[45,35,20]}]}
+{"type":"diagram","kind":"flow","nodes":[{"id":"a","label":"Start"},{"id":"b","label":"Process"},{"id":"c","label":"End"}],"edges":[{"from":"a","to":"b"},{"from":"b","to":"c"}]}
+{"type":"diagram","kind":"mindmap","root":"Main Topic","children":[{"label":"Branch A","children":[{"label":"Sub 1"},{"label":"Sub 2"}]},{"label":"Branch B"},{"label":"Branch C"}]}
+{"type":"diagram","kind":"svg","svgHtml":"<svg viewBox='0 0 600 400'>...</svg>"}
 
 ## Layout guidance
 - "title": center-aligned, use kicker + heading (gradient) + subheading + divider + pills
-- "content": left-aligned, use heading + bullets or body or stats
+- "content": left-aligned, use heading + bullets or body or stats or diagram
 - "section": full-bleed section break, use kicker + heading + optional sectionNum watermark
 - "two-column": splits elements 50/50; great for comparison or text+image
 - "big-quote": centered, large quote + author
@@ -57,7 +69,10 @@ Default background: #1e1e2e (dark). Default text: #cdd6f4.
 Always create visually rich, well-structured slides. Use gradient headings on title/section slides.
 Use kickers to label slide topics. Use dividers to add visual rhythm.
 Prefer cards for feature lists, stats for KPI dashboards, pills for tags/tech stacks.
-Use the "section" layout with sectionNum for chapter dividers in long presentations.`;
+Use the "section" layout with sectionNum for chapter dividers in long presentations.
+For diagrams: use bar/line/pie for data visualization, flow for process/architecture, mindmap for concept maps.
+When the user asks for a chart, graph, flowchart, architecture diagram, or mind map — use the diagram element.
+Use kind:"svg" only as a last resort when none of the built-in kinds fit.`;
 
 ipcMain.handle('llm:chat', async (_event, messages, settings) => {
   try {
@@ -116,7 +131,26 @@ ipcMain.handle('sessions:delete', (_event, id) => {
   return true;
 });
 
-// ── Export ────────────────────────────────────────────────────────────────────
+ipcMain.handle('image:pick', async () => {
+  const win = BrowserWindow.getFocusedWindow();
+  const { filePaths, canceled } = await dialog.showOpenDialog(win, {
+    title: 'Select Image',
+    filters: [{ name: 'Images', extensions: ['png','jpg','jpeg','gif','webp','svg'] }],
+    properties: ['openFile'],
+  });
+  if (canceled || !filePaths.length) return { success: false };
+  try {
+    const data = fs.readFileSync(filePaths[0]);
+    const ext = path.extname(filePaths[0]).slice(1).toLowerCase();
+    const mime = ext === 'svg' ? 'image/svg+xml' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : `image/${ext}`;
+    const dataUrl = `data:${mime};base64,${data.toString('base64')}`;
+    return { success: true, dataUrl, name: path.basename(filePaths[0]) };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+
 
 function escHtml(str) {
   return String(str || '')
@@ -137,9 +171,33 @@ function renderElements(elements, layout, sectionNum) {
         return `<p class="el-body">${escHtml(el.text)}</p>`;
       case 'bullets':
         return `<ul class="el-bullets">${(el.items||[]).map(i=>`<li>${escHtml(i)}</li>`).join('')}</ul>`;
-      case 'image':
-        return `<img class="el-image" src="${escHtml(el.src)}" alt="${escHtml(el.alt||'')}"/>`;
-      case 'divider':
+      case 'image': {
+        const iw = el.width  ? ` width="${escHtml(String(el.width))}"` : '';
+        const ih = el.height ? ` height="${escHtml(String(el.height))}"` : '';
+        const ir = el.radius != null ? ` style="border-radius:${escHtml(String(el.radius))}${typeof el.radius==='number'?'px':''};object-fit:${el.objectFit||'contain'}"` : el.objectFit ? ` style="object-fit:${el.objectFit}"` : '';
+        const align = el.align || 'center';
+        const float = el.float;
+        const wrapStyle = float
+          ? `float:${float};margin:0 ${float==='left'?'16px 8px 0':'0 8px 0 16px'};`
+          : `display:flex;flex-direction:column;align-items:${align==='left'?'flex-start':align==='right'?'flex-end':'center'};width:${el.width||'100%'};`;
+        const img = `<img class="el-image" src="${escHtml(el.src)}" alt="${escHtml(el.alt||'')}"${iw}${ih}${ir}/>`;
+        const cap = el.caption ? `<div class="el-image-caption">${escHtml(el.caption)}</div>` : '';
+        return `<div class="el-image-wrap" style="${wrapStyle}">${img}${cap}</div>`;
+      }
+      case 'images': {
+        const cols = el.cols || (el.items||[]).length || 2;
+        const gap = el.gap != null ? (typeof el.gap==='number'?`${el.gap}px`:el.gap) : '12px';
+        const items = (el.items||[]).map(item => {
+          const h = item.height || el.height;
+          const hStyle = h ? `height:${typeof h==='number'?`${h}px`:h};` : '';
+          const r = item.radius ?? el.radius;
+          const rStyle = r != null ? `border-radius:${typeof r==='number'?`${r}px`:r};` : '';
+          const fit = item.objectFit || el.objectFit || 'cover';
+          const cap2 = item.caption ? `<div class="el-image-caption">${escHtml(item.caption)}</div>` : '';
+          return `<div class="el-images-grid-item"><img class="el-image" src="${escHtml(item.src)}" alt="${escHtml(item.alt||'')}" style="width:100%;object-fit:${fit};${hStyle}${rStyle}"/>${cap2}</div>`;
+        }).join('');
+        return `<div class="el-images-grid" style="grid-template-columns:repeat(${Math.min(cols,6)},1fr);gap:${gap};">${items}</div>`;
+      }      case 'divider':
         return `<div class="el-divider"></div>`;
       case 'pills': {
         const pills = (el.items||[]).map(item => {
@@ -174,6 +232,8 @@ function renderElements(elements, layout, sectionNum) {
         }).join('');
         return `<div class="el-cards cols-${Math.min(cols,4)}">${cards}</div>`;
       }
+      case 'diagram':
+        return `<div class="el-diagram">${buildStaticSVG(el)}</div>`;
       default: return '';
     }
   };
@@ -214,7 +274,12 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;-webkit-font-smoo
 .el-bullets{list-style:none;display:flex;flex-direction:column;gap:14px;width:100%;}
 .el-bullets li{font-size:26px;line-height:1.5;padding-left:1.6em;position:relative;}
 .el-bullets li::before{content:'▸';position:absolute;left:0;color:#89b4fa;opacity:0.8;}
-.el-image{max-width:100%;max-height:45%;object-fit:contain;border-radius:14px;}
+.el-image-wrap{max-width:100%;}
+.el-image{max-width:100%;object-fit:contain;border-radius:14px;display:block;}
+.el-image-caption{font-size:13px;opacity:0.5;text-align:center;margin-top:6px;font-style:italic;}
+.el-images-grid{display:grid;width:100%;align-self:stretch;}
+.el-images-grid-item{display:flex;flex-direction:column;gap:4px;min-width:0;}
+.el-images-grid-item .el-image{max-height:none;width:100%;}
 .el-divider{height:3px;width:56px;background:#89b4fa;border-radius:2px;align-self:flex-start;}
 .layout-title .el-divider,.layout-section .el-divider,.layout-big-quote .el-divider{align-self:center;}
 .el-pills{display:flex;flex-wrap:wrap;gap:8px;align-self:flex-start;}
@@ -241,7 +306,159 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;-webkit-font-smoo
 .el-quote-author{font-size:16px;font-weight:500;letter-spacing:.06em;opacity:0.5;text-transform:uppercase;text-align:center;}
 .el-section-num{font-size:180px;font-weight:900;line-height:1;opacity:0.15;position:absolute;top:50%;left:50%;transform:translate(-50%,-54%);pointer-events:none;user-select:none;}
 .layout-section>:not(.el-section-num){position:relative;z-index:1;}
+.el-diagram{width:100%;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;border-radius:14px;overflow:hidden;}
+.el-diagram svg{max-width:100%;max-height:45%;}
 `;
+
+const STATIC_PALETTE = ['#89b4fa','#cba6f7','#f38ba8','#a6e3a1','#f9e2af','#fab387','#94e2d5'];
+
+// Build a static SVG representation of a diagram for HTML export
+function buildStaticSVG(el) {
+  if (!el || el.kind === 'svg') return el.svgHtml || '';
+
+  if (el.kind === 'bar') {
+    const datasets = el.datasets || [];
+    const labels = el.labels || [];
+    const data = datasets[0]?.data || [];
+    const max = Math.max(...data, 1);
+    const W = 600, H = 320, padL = 48, padB = 40, padT = 30, padR = 20;
+    const bw = Math.max(20, Math.floor((W - padL - padR) / (labels.length || 1) - 8));
+    const bars = data.map((v, i) => {
+      const barH = Math.round(((H - padT - padB) * v) / max);
+      const x = padL + i * ((W - padL - padR) / labels.length) + 4;
+      const y = H - padB - barH;
+      const color = datasets[0]?.color || STATIC_PALETTE[i % STATIC_PALETTE.length];
+      const label = labels[i] || '';
+      return `<rect x="${x}" y="${y}" width="${bw}" height="${barH}" rx="4" fill="${color}" opacity="0.85"/>
+<text x="${x + bw/2}" y="${H - padB + 16}" text-anchor="middle" fill="#a6adc8" font-size="11">${label}</text>`;
+    }).join('');
+    const title = el.title ? `<text x="${W/2}" y="20" text-anchor="middle" fill="#cdd6f4" font-size="14" font-weight="600">${el.title}</text>` : '';
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;max-height:45%;">${title}${bars}</svg>`;
+  }
+
+  if (el.kind === 'pie' || el.kind === 'doughnut') {
+    const datasets = el.datasets || [];
+    const labels = el.labels || [];
+    const data = (datasets[0]?.data || []);
+    const total = data.reduce((s, v) => s + v, 0) || 1;
+    const cx = 150, cy = 150, r = 120, ri = el.kind === 'doughnut' ? 60 : 0;
+    let angle = -Math.PI / 2;
+    const slices = data.map((v, i) => {
+      const sa = angle, ea = angle + (v / total) * 2 * Math.PI;
+      angle = ea;
+      const x1 = cx + r * Math.cos(sa), y1 = cy + r * Math.sin(sa);
+      const x2 = cx + r * Math.cos(ea), y2 = cy + r * Math.sin(ea);
+      const large = (v / total) > 0.5 ? 1 : 0;
+      const color = STATIC_PALETTE[i % STATIC_PALETTE.length];
+      const mid = (sa + ea) / 2, lr = r * 0.65;
+      const lx = cx + lr * Math.cos(mid), ly = cy + lr * Math.sin(mid);
+      const pct = Math.round(v / total * 100);
+      const inner = ri > 0
+        ? `M${cx+ri*Math.cos(sa)},${cy+ri*Math.sin(sa)} A${ri},${ri} 0 ${large} 0 ${cx+ri*Math.cos(ea)},${cy+ri*Math.sin(ea)} Z`
+        : `M${cx},${cy}`;
+      return `<path d="M${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} L${cx},${cy} Z" fill="${color}" opacity="0.9"/>
+<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-size="11" font-weight="600">${pct}%</text>`;
+    }).join('');
+    const legend = labels.map((l, i) => {
+      const color = STATIC_PALETTE[i % STATIC_PALETTE.length];
+      return `<rect x="310" y="${30 + i * 22}" width="12" height="12" rx="2" fill="${color}"/>
+<text x="328" y="${40 + i * 22}" fill="#a6adc8" font-size="12">${l}</text>`;
+    }).join('');
+    const title = el.title ? `<text x="150" y="${cy + r + 24}" text-anchor="middle" fill="#cdd6f4" font-size="13" font-weight="600">${el.title}</text>` : '';
+    return `<svg viewBox="0 0 480 330" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;max-height:45%;">${slices}${legend}${title}</svg>`;
+  }
+
+  if (el.kind === 'line') {
+    const datasets = el.datasets || [];
+    const labels = el.labels || [];
+    const W = 600, H = 320, padL = 48, padB = 40, padT = 30, padR = 20;
+    const allData = datasets.flatMap(d => d.data || []);
+    const max = Math.max(...allData, 1), min = Math.min(...allData, 0);
+    const lines = datasets.map((d, di) => {
+      const data = d.data || [];
+      const color = d.color || STATIC_PALETTE[di % STATIC_PALETTE.length];
+      const pts = data.map((v, i) => {
+        const x = padL + (i / Math.max(data.length - 1, 1)) * (W - padL - padR);
+        const y = H - padB - ((v - min) / (max - min || 1)) * (H - padT - padB);
+        return `${x},${y}`;
+      }).join(' ');
+      return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/>`;
+    }).join('');
+    const axisLabels = labels.map((l, i) => {
+      const x = padL + (i / Math.max(labels.length - 1, 1)) * (W - padL - padR);
+      return `<text x="${x}" y="${H - padB + 16}" text-anchor="middle" fill="#a6adc8" font-size="11">${l}</text>`;
+    }).join('');
+    const title = el.title ? `<text x="${W/2}" y="20" text-anchor="middle" fill="#cdd6f4" font-size="14" font-weight="600">${el.title}</text>` : '';
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;max-height:45%;">${title}${lines}${axisLabels}</svg>`;
+  }
+
+  if (el.kind === 'flow') {
+    const nodes = el.nodes || [], edges = el.edges || [];
+    const depth = {}, adj = {};
+    nodes.forEach(n => { depth[n.id] = -1; adj[n.id] = []; });
+    edges.forEach(e => { if (adj[e.from]) adj[e.from].push(e.to); });
+    const roots = nodes.filter(n => !edges.some(e => e.to === n.id)).map(n => n.id);
+    if (!roots.length && nodes.length) roots.push(nodes[0].id);
+    const queue = [...roots];
+    roots.forEach(r => { depth[r] = 0; });
+    while (queue.length) {
+      const id = queue.shift();
+      (adj[id]||[]).forEach(nid => { if (depth[nid] < depth[id]+1) { depth[nid]=depth[id]+1; queue.push(nid); } });
+    }
+    nodes.forEach(n => { if (depth[n.id] < 0) depth[n.id] = 0; });
+    const cols = {};
+    nodes.forEach(n => { const d=depth[n.id]; if(!cols[d])cols[d]=[]; cols[d].push(n.id); });
+    const numCols=Object.keys(cols).length, NW=130, NH=44, HG=90, VG=22;
+    const maxPer=Math.max(...Object.values(cols).map(a=>a.length));
+    const svgW=numCols*NW+(numCols-1)*HG+40, svgH=maxPer*NH+(maxPer-1)*VG+40;
+    const pos={};
+    Object.entries(cols).forEach(([d,ids])=>{
+      const ch=ids.length*NH+(ids.length-1)*VG, sy=(svgH-ch)/2;
+      ids.forEach((id,i)=>{ pos[id]={x:20+Number(d)*(NW+HG),y:sy+i*(NH+VG)}; });
+    });
+    const edgeSvg=edges.map(e=>{ const f=pos[e.from],t=pos[e.to]; if(!f||!t)return '';
+      return `<line x1="${f.x+NW}" y1="${f.y+NH/2}" x2="${t.x}" y2="${t.y+NH/2}" stroke="#89b4fa" stroke-width="1.5" stroke-opacity="0.6" marker-end="url(#arr)"/>`; }).join('');
+    const nodeSvg=nodes.map(n=>{ const p=pos[n.id]; if(!p)return '';
+      return `<rect x="${p.x}" y="${p.y}" width="${NW}" height="${NH}" rx="7" fill="rgba(137,180,250,.12)" stroke="#89b4fa" stroke-width="1.5"/>
+<text x="${p.x+NW/2}" y="${p.y+NH/2+1}" text-anchor="middle" dominant-baseline="middle" fill="#cdd6f4" font-size="12">${escHtml(n.label||n.id)}</text>`; }).join('');
+    return `<svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;max-height:45%;">
+<defs><marker id="arr" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#89b4fa" opacity="0.8"/></marker></defs>
+${edgeSvg}${nodeSvg}</svg>`;
+  }
+
+  if (el.kind === 'mindmap') {
+    const root = el.root || 'Topic', children = el.children || [];
+    const W=700,H=500,CX=W/2,CY=H/2;
+    function countLeaves(n){return(!n.children||!n.children.length)?1:n.children.reduce((s,c)=>s+countLeaves(c),0);}
+    const total=children.reduce((s,c)=>s+countLeaves(c),0)||1;
+    const makeNode=(x,y,label,isRoot,ci)=>{
+      const color=STATIC_PALETTE[ci%STATIC_PALETTE.length];
+      const bw=Math.max(label.length*7+(isRoot?36:24),isRoot?80:60),bh=isRoot?36:28;
+      return `<rect x="${x-bw/2}" y="${y-bh/2}" width="${bw}" height="${bh}" rx="${isRoot?10:7}" fill="${isRoot?'rgba(137,180,250,.2)':color+'22'}" stroke="${isRoot?'#89b4fa':color}" stroke-width="${isRoot?2:1.5}"/>
+<text x="${x}" y="${y+1}" text-anchor="middle" dominant-baseline="middle" fill="#cdd6f4" font-size="${isRoot?13:11}" font-weight="${isRoot?700:500}">${escHtml(label)}</text>`;
+    };
+    const makeEdge=(x1,y1,x2,y2,color)=>`<path d="M${x1},${y1} C${(x1+x2)/2},${y1} ${(x1+x2)/2},${y2} ${x2},${y2}" fill="none" stroke="${color}" stroke-width="1.5" stroke-opacity="0.5"/>`;
+    let cursor=0, nodes=makeNode(CX,CY,root,true,0), edges='';
+    children.forEach((child,ci)=>{
+      const leaves=countLeaves(child), mid=cursor+leaves/2;
+      const angle=((mid/total)*2*Math.PI)-Math.PI/2;
+      const r1=160,cx2=CX+r1*Math.cos(angle),cy2=CY+r1*Math.sin(angle);
+      const color=STATIC_PALETTE[ci%STATIC_PALETTE.length];
+      edges+=makeEdge(CX,CY,cx2,cy2,color);
+      nodes+=makeNode(cx2,cy2,child.label||'',false,ci);
+      (child.children||[]).forEach((gc,gci)=>{
+        const sub=child.children.length, subA=angle+((gci-(sub-1)/2)*0.35);
+        const r2=110,gcx=cx2+r2*Math.cos(subA),gcy=cy2+r2*Math.sin(subA);
+        edges+=makeEdge(cx2,cy2,gcx,gcy,color);
+        nodes+=makeNode(gcx,gcy,gc.label||'',false,ci);
+      });
+      cursor+=leaves;
+    });
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;max-height:45%;">${edges}${nodes}</svg>`;
+  }
+
+  return '';
+}
 
 function buildSlideDiv(slide, extraClass) {
   const bg = slide.background || '#1e1e2e';

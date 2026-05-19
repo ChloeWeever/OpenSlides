@@ -183,11 +183,50 @@ body {
 }
 
 /* Image */
+.el-image-wrap {
+  max-width: 100%;
+}
+
 .el-image {
   max-width: 100%;
-  max-height: 42vh;
+  max-height: 50vh;
   object-fit: contain;
   border-radius: var(--radius);
+  display: block;
+}
+
+.el-image-caption {
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: center;
+  margin-top: 6px;
+  font-style: italic;
+}
+
+/* Multi-image grid */
+.el-images-grid {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  align-self: stretch;
+  min-height: 0;
+}
+
+.el-images-grid-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.el-images-grid-item .el-image {
+  max-height: none;
+  width: 100%;
+  object-fit: cover;
+  flex: 1;
+  min-height: 0;
 }
 
 /* ── Card grid ─────────────────────────────────────────────────────────────── */
@@ -402,6 +441,38 @@ body {
 @keyframes fade-out        { from { opacity:1; } to { opacity:0; } }
 @keyframes zoom-in  { from { transform:scale(.88); opacity:0; } to { transform:scale(1);   opacity:1; } }
 @keyframes zoom-out { from { transform:scale(1);   opacity:1; } to { transform:scale(1.08);opacity:0; } }
+
+.el-diagram {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.el-diagram canvas {
+  max-width: 100%;
+  max-height: 52vh;
+}
+
+.el-diagram svg {
+  max-width: 100%;
+  max-height: 52vh;
+  overflow: visible;
+}
+
+.el-diagram-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  text-align: center;
+  margin-bottom: 6px;
+}
 
 .anim-slide-enter-forward  { animation: slide-in-right  .42s cubic-bezier(.22,1,.36,1) forwards; }
 .anim-slide-exit-forward   { animation: slide-out-left  .42s cubic-bezier(.22,1,.36,1) forwards; }

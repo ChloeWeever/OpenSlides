@@ -69,6 +69,15 @@ function useSlideManager() {
     setPointer((p) => p + 1);
   }, [canRedo]);
 
+  const reorderSlide = React.useCallback((fromIndex, toIndex) => {
+    if (fromIndex === toIndex) return;
+    const next = [...slides];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    pushHistory(next);
+    setCurrentIndex(toIndex);
+  }, [slides, pushHistory]);
+
   const goNext = React.useCallback(() => {
     lastDirection.current = 'forward';
     setCurrentIndex((i) => Math.min(i + 1, slides.length - 1));
@@ -152,6 +161,7 @@ function useSlideManager() {
     goNext,
     goPrev,
     goTo,
+    reorderSlide,
     applyAction,
     savePresentation,
     loadPresentation,

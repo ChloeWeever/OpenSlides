@@ -250,6 +250,8 @@ function App() {
             onNext={slideManager.goNext}
             onPrev={slideManager.goPrev}
             onGoTo={slideManager.goTo}
+            onReorder={slideManager.reorderSlide}
+            onApplyAction={slideManager.applyAction}
             onSave={slideManager.savePresentation}
             onElementSelected={(el) => setSelectedElement(el)}
             canUndo={slideManager.canUndo}

@@ -27,6 +27,69 @@ function ThumbnailSlide({ slide }) {
   );
 }
 
+// ── Thumbnail strip with drag-to-reorder ──────────────────────────────────────
+function ThumbnailStrip({ slides, currentIndex, onGoTo, onReorder }) {
+  const dragFrom = React.useRef(null);
+  const [dragOver, setDragOver] = React.useState(null);
+
+  const handleDragStart = (e, i) => {
+    dragFrom.current = i;
+    e.dataTransfer.effectAllowed = 'move';
+    // Ghost image: use the element itself
+    e.dataTransfer.setDragImage(e.currentTarget, 48, 32);
+  };
+
+  const handleDragOver = (e, i) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOver !== i) setDragOver(i);
+  };
+
+  const handleDrop = (e, i) => {
+    e.preventDefault();
+    const from = dragFrom.current;
+    setDragOver(null);
+    dragFrom.current = null;
+    if (from != null && from !== i) onReorder(from, i);
+  };
+
+  const handleDragEnd = () => {
+    setDragOver(null);
+    dragFrom.current = null;
+  };
+
+  return (
+    <div className="flex gap-2 px-4 pb-3 overflow-x-auto flex-shrink-0 border-t border-[#2a2a3a] pt-3">
+      {slides.map((slide, i) => (
+        <div
+          key={slide.id || i}
+          draggable
+          onDragStart={(e) => handleDragStart(e, i)}
+          onDragOver={(e) => handleDragOver(e, i)}
+          onDrop={(e) => handleDrop(e, i)}
+          onDragEnd={handleDragEnd}
+          style={{
+            outline: dragOver === i && dragFrom.current !== i
+              ? '2px solid #6366f1'
+              : 'none',
+            borderRadius: '6px',
+            transition: 'outline 0.1s',
+          }}
+        >
+          <button
+            onClick={() => onGoTo(i)}
+            className={`slide-thumb w-24 flex-shrink-0 no-drag ${i === currentIndex ? 'active' : ''}`}
+            title={`Slide ${i + 1} — drag to reorder`}
+          >
+            <ThumbnailSlide slide={slide} />
+          </button>
+          <div className="text-center text-[10px] text-[#4a4a6a] mt-0.5 select-none">{i + 1}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Fullscreen presenter overlay ──────────────────────────────────────────────
 function FullscreenPresenter({ slides, startIndex, onClose }) {
   const [index, setIndex] = React.useState(startIndex);
@@ -187,12 +250,194 @@ function FullscreenPresenter({ slides, startIndex, onClose }) {
   );
 }
 
+// ── Image layout templates ────────────────────────────────────────────────────
+const IMAGE_LAYOUTS = [
+  {
+    id: 'single',
+    label: 'Single',
+    count: 1,
+    icon: '▣',
+    preview: [{ x: 10, y: 10, w: 80, h: 80 }],
+    build: (urls) => ({ type: 'image', src: urls[0], alt: '', align: 'center', objectFit: 'contain' }),
+  },
+  {
+    id: 'two-col',
+    label: '2 Side by Side',
+    count: 2,
+    icon: '▣▣',
+    preview: [{ x: 5, y: 10, w: 40, h: 80 }, { x: 55, y: 10, w: 40, h: 80 }],
+    build: (urls) => ({ type: 'images', cols: 2, gap: 12, objectFit: 'cover', radius: 10,
+      items: urls.map((src) => ({ src, alt: '' })) }),
+  },
+  {
+    id: 'three-col',
+    label: '3 Column',
+    count: 3,
+    icon: '▣▣▣',
+    preview: [{ x: 3, y: 10, w: 28, h: 80 }, { x: 36, y: 10, w: 28, h: 80 }, { x: 69, y: 10, w: 28, h: 80 }],
+    build: (urls) => ({ type: 'images', cols: 3, gap: 10, objectFit: 'cover', radius: 8,
+      items: urls.map((src) => ({ src, alt: '' })) }),
+  },
+  {
+    id: 'hero-thumb',
+    label: 'Hero + Thumbs',
+    count: 3,
+    icon: '▣+▣▣',
+    preview: [
+      { x: 5, y: 10, w: 55, h: 80 },
+      { x: 65, y: 10, w: 30, h: 37 },
+      { x: 65, y: 53, w: 30, h: 37 },
+    ],
+    build: (urls) => ({
+      type: 'images', cols: 2, gap: 10, objectFit: 'cover', radius: 10,
+      items: [
+        { src: urls[0], alt: '', style: 'grid-row: span 2' },
+        { src: urls[1], alt: '' },
+        { src: urls[2], alt: '' },
+      ],
+      // CSS grid: first item spans 2 rows
+      gridTemplate: '"a b" "a c"',
+    }),
+  },
+  {
+    id: 'two-plus-one',
+    label: 'Wide + 2 Stack',
+    count: 3,
+    icon: '▬+▣▣',
+    preview: [
+      { x: 5, y: 10, w: 90, h: 45 },
+      { x: 5, y: 58, w: 42, h: 32 },
+      { x: 53, y: 58, w: 42, h: 32 },
+    ],
+    build: (urls) => ({ type: 'images', cols: 2, gap: 10, objectFit: 'cover', radius: 10,
+      gridTemplate: '"a a" "b c"',
+      items: urls.map((src) => ({ src, alt: '' })) }),
+  },
+  {
+    id: 'mosaic',
+    label: 'Mosaic 4',
+    count: 4,
+    icon: '⊞',
+    preview: [
+      { x: 5, y: 10, w: 42, h: 37 }, { x: 53, y: 10, w: 42, h: 37 },
+      { x: 5, y: 52, w: 42, h: 37 }, { x: 53, y: 52, w: 42, h: 37 },
+    ],
+    build: (urls) => ({ type: 'images', cols: 2, gap: 8, objectFit: 'cover', radius: 10,
+      items: urls.map((src) => ({ src, alt: '' })) }),
+  },
+  {
+    id: 'strip',
+    label: 'Horizontal Strip',
+    count: 4,
+    icon: '▬▬▬▬',
+    preview: [
+      { x: 3, y: 25, w: 21, h: 50 }, { x: 27, y: 25, w: 21, h: 50 },
+      { x: 51, y: 25, w: 21, h: 50 }, { x: 75, y: 25, w: 21, h: 50 },
+    ],
+    build: (urls) => ({ type: 'images', cols: 4, gap: 8, height: 220, objectFit: 'cover', radius: 8,
+      items: urls.map((src) => ({ src, alt: '' })) }),
+  },
+];
+
+// Mini SVG preview for a layout
+function LayoutPreview({ rects }) {
+  return (
+    <svg viewBox="0 0 100 100" style={{ width: 72, height: 72 }}>
+      {rects.map((r, i) => (
+        <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h}
+          rx="4" fill="rgba(137,180,250,.25)" stroke="#89b4fa" strokeWidth="1.5" />
+      ))}
+    </svg>
+  );
+}
+
+// ── ImageTray — shows images on the current slide, allows removal ─────────────
+function ImageTray({ slide, onApplyAction }) {
+  const images = (slide?.elements || [])
+    .map((el, idx) => ({ el, idx }))
+    .filter(({ el }) => el.type === 'image' || el.type === 'images');
+  if (!images.length) return null;
+
+  const handleRemove = (elIndex) => {
+    const elements = (slide.elements || []).filter((_, i) => i !== elIndex);
+    onApplyAction({ action: 'update_slide', slideId: slide.id, slide: { ...slide, elements } });
+  };
+
+  const thumbSrc = (el) => {
+    if (el.type === 'image') return el.src;
+    return el.items?.[0]?.src || '';
+  };
+
+  const thumbLabel = (el) => {
+    if (el.type === 'image') return '1 image';
+    return `${(el.items||[]).length} images`;
+  };
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-2 border-t border-[#2a2a3a] overflow-x-auto flex-shrink-0">
+      <span className="text-[10px] text-[#4a4a6a] uppercase tracking-wider flex-shrink-0">Images</span>
+      {images.map(({ el, idx }) => (
+        <div key={idx} className="relative flex-shrink-0 group">
+          <div className="h-12 w-20 rounded-md border border-[#2a2a3a] overflow-hidden bg-[#1a1a2a] flex items-center justify-center">
+            <img src={thumbSrc(el)} alt="" className="h-full w-full object-cover" />
+          </div>
+          <div className="text-[9px] text-[#4a4a6a] text-center mt-0.5">{thumbLabel(el)}</div>
+          <button
+            onClick={() => handleRemove(idx)}
+            title="Remove"
+            className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#f38ba8] text-black text-[9px] font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity leading-none"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── PreviewPanel ──────────────────────────────────────────────────────────────
-function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, onPrev, onGoTo, onSave, onElementSelected, canUndo, canRedo, onUndo, onRedo }) {
+function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, onPrev, onGoTo, onReorder, onApplyAction, onSave, onElementSelected, canUndo, canRedo, onUndo, onRedo }) {
   const iframeRef = React.useRef(null);
   const [selectedTransition, setSelectedTransition] = React.useState(currentSlide?.transition || 'slide');
   const [showTransitions, setShowTransitions] = React.useState(false);
   const [fullscreen, setFullscreen] = React.useState(false);
+  const [showImagePicker, setShowImagePicker] = React.useState(false);
+  const [uploadingImage, setUploadingImage] = React.useState(false);
+  const imagePickerRef = React.useRef(null);
+
+  // Close image picker on outside click
+  React.useEffect(() => {
+    if (!showImagePicker) return;
+    const handler = (e) => {
+      if (imagePickerRef.current && !imagePickerRef.current.contains(e.target)) {
+        setShowImagePicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showImagePicker]);
+
+  const handleInsertLayout = React.useCallback(async (layout) => {
+    setShowImagePicker(false);
+    if (!window.openslides?.pickImage) return;
+    setUploadingImage(true);
+    try {
+      const urls = [];
+      for (let i = 0; i < layout.count; i++) {
+        const result = await window.openslides.pickImage();
+        if (!result.success) break;
+        urls.push(result.dataUrl);
+      }
+      if (!urls.length) return;
+      // Fill remaining slots with first image if user cancelled early
+      while (urls.length < layout.count) urls.push(urls[0]);
+      const element = layout.build(urls);
+      const updatedElements = [...(currentSlide.elements || []), element];
+      onApplyAction({ action: 'update_slide', slideId: currentSlide.id, slide: { ...currentSlide, elements: updatedElements } });
+    } finally {
+      setUploadingImage(false);
+    }
+  }, [currentSlide, onApplyAction]);
 
   React.useEffect(() => {
     const iframe = iframeRef.current;
@@ -207,7 +452,6 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
     else iframe.onload = send;
   }, [currentSlide]);
 
-  // Listen for element selection from iframe
   React.useEffect(() => {
     const handler = (e) => {
       if (e.data?.type === 'element-selected') {
@@ -218,7 +462,6 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
     return () => window.removeEventListener('message', handler);
   }, [onElementSelected]);
 
-  // F5 to start fullscreen
   React.useEffect(() => {
     const handler = (e) => {
       if (e.key === 'F5') { e.preventDefault(); setFullscreen(true); }
@@ -270,6 +513,38 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
         <span className="text-sm text-[#cdd6f4] flex-1 truncate">
           {(currentSlide?.elements || []).find((e) => e.type === 'heading')?.text || `Slide ${currentIndex + 1}`}
         </span>
+
+        {/* Insert image — layout picker */}
+        <div className="relative" ref={imagePickerRef}>
+          <button
+            onClick={() => setShowImagePicker((v) => !v)}
+            disabled={uploadingImage}
+            title="Insert image(s) into current slide"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-all disabled:opacity-40 ${showImagePicker ? 'bg-[#6366f1] text-white border-[#6366f1]' : 'text-[#8888a8] hover:text-white hover:bg-[#2a2a3a] border-[#2a2a3a]'}`}
+          >
+            {uploadingImage ? '…' : '🖼 Image'}
+          </button>
+          {showImagePicker && (
+            <div className="absolute left-0 top-full mt-1 z-20 bg-[#1c1c28] border border-[#2a2a3a] rounded-xl shadow-2xl p-3" style={{ width: 340 }}>
+              <div className="text-[10px] text-[#4a4a6a] uppercase tracking-wider mb-2 px-1">Choose a layout</div>
+              <div className="grid grid-cols-3 gap-2">
+                {IMAGE_LAYOUTS.map((layout) => (
+                  <button
+                    key={layout.id}
+                    onClick={() => handleInsertLayout(layout)}
+                    className="flex flex-col items-center gap-1.5 p-2 rounded-lg hover:bg-[#2a2a3a] transition-colors group"
+                  >
+                    <LayoutPreview rects={layout.preview} />
+                    <span className="text-[10px] text-[#8888a8] group-hover:text-[#cdd6f4] transition-colors text-center leading-tight">
+                      {layout.label}
+                    </span>
+                    <span className="text-[9px] text-[#4a4a6a]">{layout.count} photo{layout.count > 1 ? 's' : ''}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Transition picker */}
         <div className="relative">
@@ -348,18 +623,16 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
         </div>
       </div>
 
+      {/* Image tray — shown when current slide has images */}
+      <ImageTray slide={currentSlide} onApplyAction={onApplyAction} />
+
       {/* Thumbnail strip */}
-      <div className="flex gap-2 px-4 pb-3 overflow-x-auto flex-shrink-0 border-t border-[#2a2a3a] pt-3">
-        {slides.map((slide, i) => (
-          <button
-            key={slide.id || i}
-            onClick={() => onGoTo(i)}
-            className={`slide-thumb w-24 flex-shrink-0 no-drag ${i === currentIndex ? 'active' : ''}`}
-          >
-            <ThumbnailSlide slide={slide} />
-          </button>
-        ))}
-      </div>
+      <ThumbnailStrip
+        slides={slides}
+        currentIndex={currentIndex}
+        onGoTo={onGoTo}
+        onReorder={onReorder}
+      />
     </div>
   );
 }
