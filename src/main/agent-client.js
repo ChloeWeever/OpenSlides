@@ -95,18 +95,32 @@ const generateSoloHtmlTool = tool(
   }
 );
 
+// ── Logger ────────────────────────────────────────────────────────────────────
+
+const log = {
+  info:  (...a) => console.log ('[agent]', ...a),
+  warn:  (...a) => console.warn ('[agent]', ...a),
+  error: (...a) => console.error('[agent]', ...a),
+};
+
 // ── Model factory ─────────────────────────────────────────────────────────────
 
 function buildChatModel(settings, tools, maxTokens = 8192) {
   const provider = (settings.apiProvider || 'openai').toLowerCase();
 
   if (provider === 'anthropic') {
+    // Strip any "anthropic/" or "anthropic--" prefix that LiteLLM-style names may include
+    const rawModel = settings.modelName || 'claude-3-5-sonnet-20241022';
+    const cleanModel = rawModel.replace(/^anthropic[-/]+/i, '');
+    log.info(`buildChatModel: anthropic model="${cleanModel}" (raw="${rawModel}")`);
     const model = new ChatAnthropic({
       apiKey: settings.apiKey,
-      model: settings.modelName || 'claude-3-5-sonnet-20241022',
+      model: cleanModel,
       maxTokens,
     });
-    return model.bindTools(tools);
+    // Force the model to call a tool (any tool) — prevents it from generating
+    // plain text and hanging the ReAct loop waiting for a tool call that never comes
+    return model.bindTools(tools, { tool_choice: { type: 'any' } });
   }
 
   // openai / litellm
@@ -123,16 +137,9 @@ function buildChatModel(settings, tools, maxTokens = 8192) {
     maxTokens,
     ...(Object.keys(configuration).length ? { configuration } : {}),
   });
-  return model.bindTools(tools);
+  // Force tool use so the agent doesn't loop on plain-text responses
+  return model.bindTools(tools, { tool_choice: 'required' });
 }
-
-// ── Logger ────────────────────────────────────────────────────────────────────
-
-const log = {
-  info:  (...a) => console.log ('[agent]', ...a),
-  warn:  (...a) => console.warn ('[agent]', ...a),
-  error: (...a) => console.error('[agent]', ...a),
-};
 
 // ── Agent runners ─────────────────────────────────────────────────────────────
 
@@ -161,12 +168,15 @@ Call the generate_slide tool with the complete slide object.`;
 
   let result;
   try {
-    result = await agent.invoke({
-      messages: [
-        { role: 'system', content: SLIDE_GEN_SYSTEM },
-        { role: 'user', content: userPrompt },
-      ],
-    });
+    result = await agent.invoke(
+      {
+        messages: [
+          { role: 'system', content: SLIDE_GEN_SYSTEM },
+          { role: 'user', content: userPrompt },
+        ],
+      },
+      { recursionLimit: 5 }
+    );
   } catch (err) {
     log.error(`✗ genSlide ${label} — invoke failed (${Date.now() - t0}ms):`, err.message);
     throw err;
@@ -220,12 +230,15 @@ Call the generate_solo_html tool with the complete HTML document.`;
 
   let result;
   try {
-    result = await agent.invoke({
-      messages: [
-        { role: 'system', content: SOLO_SLIDE_SYSTEM },
-        { role: 'user', content: userPrompt },
-      ],
-    });
+    result = await agent.invoke(
+      {
+        messages: [
+          { role: 'system', content: SOLO_SLIDE_SYSTEM },
+          { role: 'user', content: userPrompt },
+        ],
+      },
+      { recursionLimit: 5 }
+    );
   } catch (err) {
     log.error(`✗ genSoloSlide ${label} — invoke failed (${Date.now() - t0}ms):`, err.message);
     throw err;
