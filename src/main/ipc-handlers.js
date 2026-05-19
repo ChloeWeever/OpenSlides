@@ -509,7 +509,7 @@ function buildSlideDiv(slide, extraClass) {
     const escaped = slide.soloHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
     const cls = extraClass && extraClass !== 'slide-page' ? ` ${extraClass}` : '';
     return `<div class="slide-page${cls}" style="padding:0;overflow:hidden;align-items:center;justify-content:center;">`
-      + `<iframe srcdoc="${escaped}" style="width:1920px;height:1080px;border:none;display:block;flex-shrink:0;" sandbox="allow-scripts allow-same-origin"></iframe>`
+      + `<iframe class="solo-iframe" srcdoc="${escaped}" style="width:1920px;height:1080px;border:none;display:block;flex-shrink:0;transform-origin:center center;" sandbox="allow-scripts allow-same-origin"></iframe>`
       + `</div>`;
   }
   const bg = slide.background || '#1e1e2e';
@@ -527,7 +527,7 @@ function buildStandaloneHTML(slides, title) {
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=1920,initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>${escHtml(title||'Presentation')}</title>
 <style>
 ${SLIDE_CSS}
@@ -594,6 +594,13 @@ document.addEventListener('click',function(e){
   else if(e.clientX<window.innerWidth*0.4)prev();
 });
 show(0);resetHide();
+function scaleSoloIframes(){
+  var iframes=document.querySelectorAll('.solo-iframe');
+  var s=Math.min(window.innerWidth/1920,window.innerHeight/1080);
+  iframes.forEach(function(f){f.style.transform='scale('+s+')';});
+}
+scaleSoloIframes();
+window.addEventListener('resize',scaleSoloIframes);
 </script>
 ${_chartJS ? `<script>${_chartJS}</script>` : ''}
 ${_diagramRendererJS ? `<script>${_diagramRendererJS}\n${DIAGRAM_INIT_JS}</script>` : ''}
