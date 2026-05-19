@@ -29,9 +29,18 @@ function resolveThemeColors(container) {
 function renderSlide(container, slide) {
   if (slide.soloHtml) {
     container.className = 'slide-container';
-    container.style.cssText = 'background:#fff;padding:0;overflow:hidden;';
-    container.innerHTML = '<iframe style="width:100%;height:100%;border:none;display:block;" sandbox="allow-scripts allow-same-origin"></iframe>';
-    container.querySelector('iframe').srcdoc = slide.soloHtml;
+    container.style.cssText = 'padding:0;overflow:hidden;position:absolute;inset:0;';
+    const cw = container.offsetWidth  || window.innerWidth;
+    const ch = container.offsetHeight || window.innerHeight;
+    const scaleX = cw / 1920;
+    const scaleY = ch / 1080;
+    const scale  = Math.min(scaleX, scaleY);
+    const iframeEl = document.createElement('iframe');
+    iframeEl.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+    iframeEl.style.cssText = `width:1920px;height:1080px;border:none;display:block;transform-origin:top left;transform:scale(${scale});`;
+    container.innerHTML = '';
+    container.appendChild(iframeEl);
+    iframeEl.srcdoc = slide.soloHtml;
     return;
   }
   container.className = `slide-container layout-${slide.layout || 'content'}`;
