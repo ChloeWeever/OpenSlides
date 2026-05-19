@@ -233,6 +233,78 @@ Fill ALL body content with real information from the user's original request abo
   }
 });
 
+const SOLO_OUTLINE_PROMPT = `You are a presentation planning assistant. Given the user's request, output a slide outline as JSON.
+
+Respond ONLY with raw JSON — no markdown, no explanation:
+{"action":"outline","slides":[
+  {"id":"slide-1","title":"Slide Title","notes":"Key points and content for this slide"}
+]}
+
+Rules:
+- id: "slide-1", "slide-2", … (sequential)
+- title: the real heading text for this slide
+- notes: 1-3 sentences describing what this slide should cover (used as content brief for the designer)
+- Aim for 6-12 slides unless the request clearly needs more or fewer`;
+
+const SOLO_SLIDE_PROMPT = `You are a world-class presentation designer. Create ONE visually stunning slide as a complete self-contained HTML document.
+
+Respond ONLY with valid JSON — no markdown fences, no explanation:
+{"action":"solo_slide","html":"<full html string>"}
+
+Rules for the HTML:
+- Must be a complete <!DOCTYPE html> document
+- Use ONLY inline CSS — no external stylesheets, no CDN links, no @import
+- Slide canvas: body { margin:0; padding:0; width:1920px; height:1080px; overflow:hidden; }
+- Design guidelines: bold typography, generous whitespace, strong color contrast
+- You may freely use SVG elements, CSS gradients, CSS shapes, CSS animations
+- Do NOT use any JavaScript
+- The design should reflect the slide title and content below
+
+Slide title: {TITLE}
+Content brief: {NOTES}
+Overall topic: {TOPIC}
+This is slide {INDEX} of {TOTAL}`;
+
+ipcMain.handle('llm:solo-outline', async (_event, { text, settings }) => {
+  try {
+    const messages = [
+      { role: 'system', content: SOLO_OUTLINE_PROMPT },
+      { role: 'user', content: text },
+    ];
+    const rawText = await callLLM(messages, settings, 16000);
+    const parsed = parseJSONResponse(rawText);
+    if (!parsed) return { success: false, error: `JSON parse failed: ${rawText.slice(0, 300)}` };
+    const slides = parsed.slides || parsed;
+    if (!Array.isArray(slides) || !slides.length) {
+      return { success: false, error: `Outline format error: ${rawText.slice(0, 300)}` };
+    }
+    return { success: true, data: { action: 'outline', slides }, raw: rawText };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('llm:solo-slide', async (_event, { outlineSlide, allOutline, userRequest, slideIndex, totalSlides, settings }) => {
+  try {
+    const prompt = SOLO_SLIDE_PROMPT
+      .replace('{TITLE}', outlineSlide.title || '')
+      .replace('{NOTES}', outlineSlide.notes || outlineSlide.title || '')
+      .replace('{TOPIC}', userRequest)
+      .replace('{INDEX}', String(slideIndex + 1))
+      .replace('{TOTAL}', String(totalSlides));
+
+    const messages = [
+      { role: 'user', content: prompt },
+    ];
+    const rawText = await callLLM(messages, settings, 8192);
+    const parsed = parseJSONResponse(rawText);
+    if (!parsed || !parsed.html) return { success: false, error: `Solo slide ${slideIndex + 1} parse failed: ${rawText.slice(0, 200)}` };
+    return { success: true, data: { action: 'solo_slide', html: parsed.html }, raw: rawText };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('llm:chat', async (_event, messages, settings) => {
   try {
     const allMessages = [{ role: 'system', content: SYSTEM_PROMPT }, ...messages];
@@ -703,13 +775,20 @@ ${_diagramRendererJS ? `<script>${_diagramRendererJS}\n${DIAGRAM_INIT_JS}</scrip
 // Single HTML with all slides — used by PDF export to avoid reloading per slide
 function buildAllSlidesHTML(slides, w, h) {
   const pages = slides.map((s, i) => {
+    const display = `display:${i === 0 ? 'flex' : 'none'};position:absolute;inset:0;`;
+    if (s.soloHtml) {
+      const escaped = s.soloHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+      return `<div class="slide-page" style="${display}">`
+        + `<iframe srcdoc="${escaped}" style="width:100%;height:100%;border:none;display:block;" sandbox="allow-scripts"></iframe>`
+        + `</div>`;
+    }
     const bg = s.background || '#1e1e2e';
     const color = s.color || '#cdd6f4';
     const layout = s.layout || 'content';
     const inner = renderElements(s.elements, layout, s.sectionNum);
     const tv = themeVarsStyle(s.themeVars);
     const style = `background:${bg};color:${color}${tv ? ';' + tv : ''}`;
-    return `<div class="slide-page" style="display:${i === 0 ? 'flex' : 'none'};position:absolute;inset:0;">`
+    return `<div class="slide-page" style="${display}">`
       + `<div class="slide-container layout-${layout}" style="${style}">${inner}</div>`
       + `</div>`;
   }).join('\n');

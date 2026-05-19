@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('openslides', {
   sendChat: (messages, settings) => ipcRenderer.invoke('llm:chat', messages, settings),
   genOutline: (userRequest, settings) => ipcRenderer.invoke('llm:outline', userRequest, settings),
   genSlide: (params, settings) => ipcRenderer.invoke('llm:gen-slide', params, settings),
+  genSoloOutline: (text, settings) => ipcRenderer.invoke('llm:solo-outline', { text, settings }),
+  genSoloSlide: (params, settings) => ipcRenderer.invoke('llm:solo-slide', { ...params, settings }),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),
   savePresentation: (data) => ipcRenderer.invoke('presentation:save', data),

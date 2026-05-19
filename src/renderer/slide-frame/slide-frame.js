@@ -27,6 +27,13 @@ function resolveThemeColors(container) {
 }
 
 function renderSlide(container, slide) {
+  if (slide.soloHtml) {
+    container.className = 'slide-container';
+    container.style.cssText = 'background:#fff;padding:0;overflow:hidden;';
+    container.innerHTML = '<iframe style="width:100%;height:100%;border:none;display:block;" sandbox="allow-scripts allow-same-origin"></iframe>';
+    container.querySelector('iframe').srcdoc = slide.soloHtml;
+    return;
+  }
   container.className = `slide-container layout-${slide.layout || 'content'}`;
   container.style.background = slide.background || '';
   container.style.color = slide.color || '';
@@ -847,9 +854,11 @@ function showSlideSimple(slide, direction) {
 
     // Swap: render the new slide fresh into `current` (avoids innerHTML/canvas loss)
     renderSlide(current, slide);
-    current.className = `slide-container layout-${slide.layout || 'content'}`;
-    current.style.background = slide.background || '';
-    current.style.color = slide.color || '';
+    if (!slide.soloHtml) {
+      current.className = `slide-container layout-${slide.layout || 'content'}`;
+      current.style.background = slide.background || '';
+      current.style.color = slide.color || '';
+    }
 
     // Reset next
     next.innerHTML = '';

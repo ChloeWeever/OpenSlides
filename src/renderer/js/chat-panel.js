@@ -63,12 +63,13 @@ function GenerationProgress({ outline, currentStep, done, error }) {
                 <span className={`truncate flex-1 font-medium ${state === 'pending' ? 'ui-text-4' : 'ui-text-2'}`}>
                   {s.title}
                 </span>
-                <span className="flex-shrink-0 text-[9px] ui-text-4">[{s.layout}]</span>
+                {s.layout && <span className="flex-shrink-0 text-[9px] ui-text-4">[{s.layout}]</span>}
               </div>
-              {state !== 'pending' && (s.kicker || s.contentType) && (
+              {state !== 'pending' && (s.kicker || s.contentType || s.notes) && (
                 <div className="ml-6 mt-0.5 text-[10px] leading-snug ui-text-3">
                   {s.kicker && <span className="mr-1" style={{color:'var(--ui-primary)'}}>{s.kicker}</span>}
                   {s.contentType && <span className="opacity-60">[{s.contentType}]</span>}
+                  {s.notes && !s.kicker && <span className="opacity-60 truncate">{s.notes.slice(0, 60)}</span>}
                 </div>
               )}
             </div>
@@ -97,6 +98,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
   const [genStep, setGenStep] = React.useState(0);
   const [genDone, setGenDone] = React.useState(false);
   const [genError, setGenError] = React.useState('');
+  const [genMode, setGenMode] = React.useState('template'); // 'template' | 'solo'
   const endRef = React.useRef(null);
   const textareaRef = React.useRef(null);
 
@@ -205,11 +207,94 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
     }
   }, [settings, onApplyAction, setMessages]);
 
+  const generateSoloPresentation = React.useCallback(async (text) => {
+    setThinking(true);
+    setGenOutline(null);
+    setGenDone(false);
+    setGenError('');
+    setError('');
+
+    setMessages((prev) => [...prev, { role: 'user', content: text }]);
+    setInput('');
+
+    try {
+      setMessages((prev) => [...prev, { role: 'assistant', content: t('genStarting') }]);
+      const outlineResult = await window.openslides.genSoloOutline(text, settings);
+      if (!outlineResult.success) throw new Error(outlineResult.error);
+      const outline = outlineResult.data?.slides;
+      if (!Array.isArray(outline) || !outline.length) throw new Error(t('genFailed'));
+
+      setMessages((prev) => {
+        const next = [...prev];
+        next[next.length - 1] = {
+          role: 'assistant',
+          content: `${t('genOutlineConfirmed', outline.length)}\n${outline.map((s, i) => `${i+1}. ${s.title}`).join('\n')}\n\n${t('genStarting')}`,
+        };
+        return next;
+      });
+
+      setGenOutline(outline);
+      setGenStep(1);
+      setThinking(false);
+
+      const allSlides = [];
+      let errorCount = 0;
+
+      for (let i = 0; i < outline.length; i++) {
+        setGenStep(i + 1);
+        const s = outline[i];
+        const slideResult = await window.openslides.genSoloSlide(
+          { outlineSlide: s, allOutline: outline, userRequest: text, slideIndex: i, totalSlides: outline.length },
+          settings
+        );
+        if (!slideResult.success || !slideResult.data?.html) {
+          errorCount++;
+          setGenError(t('genSlideFailed', i + 1));
+          allSlides.push({
+            id: s.id || `slide-${i + 1}`,
+            layout: 'blank',
+            background: '#ffffff',
+            transition: i === 0 ? 'fade' : 'slide',
+            elements: [
+              { type: 'heading', text: s.title || `Slide ${i + 1}` },
+              { type: 'body', text: slideResult.error || t('genFailed') },
+            ],
+          });
+        } else {
+          allSlides.push({
+            id: s.id || `slide-${i + 1}`,
+            layout: 'blank',
+            soloHtml: slideResult.data.html,
+            background: '#ffffff',
+            transition: i === 0 ? 'fade' : 'slide',
+          });
+        }
+        onApplyAction({ action: 'replace_all', slides: [...allSlides] });
+      }
+
+      setGenStep(outline.length + 1);
+      setGenDone(true);
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: errorCount > 0
+          ? t('genDoneWithErrors', outline.length, errorCount)
+          : t('genDoneAll', outline.length),
+      }]);
+    } catch (err) {
+      setGenError(err.message);
+      setError(err.message);
+      setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
+      setThinking(false);
+    }
+  }, [settings, onApplyAction, setMessages]);
+
   const sendMessage = React.useCallback(async (text) => {
     if (!text.trim() || thinking) return;
 
     if (isPresentationRequest(text) && window.openslides?.genOutline) {
-      return generatePresentation(text);
+      return genMode === 'solo'
+        ? generateSoloPresentation(text)
+        : generatePresentation(text);
     }
 
     setError('');
@@ -240,7 +325,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
     } finally {
       setThinking(false);
     }
-  }, [messages, thinking, buildContext, onApplyAction, settings, setMessages, generatePresentation]);
+  }, [messages, thinking, buildContext, onApplyAction, settings, setMessages, generatePresentation, generateSoloPresentation, genMode]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -293,6 +378,24 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
       {genOutline && (
         <GenerationProgress outline={genOutline} currentStep={genStep} done={genDone} error={genError} />
       )}
+
+      {/* Mode toggle */}
+      <div className="px-4 pb-1 pt-1 flex items-center gap-2 flex-shrink-0">
+        <span className="text-xs ui-text-4">{t('genMode')}</span>
+        {['template', 'solo'].map((m) => (
+          <button
+            key={m}
+            onClick={() => setGenMode(m)}
+            disabled={thinking || isGenerating}
+            className="text-xs px-2.5 py-1 rounded-md border transition-all disabled:opacity-40"
+            style={genMode === m
+              ? {background:'var(--ui-primary)',color:'#fff',borderColor:'var(--ui-primary)',borderWidth:1,borderStyle:'solid'}
+              : {background:'var(--ui-bg-4)',borderColor:'var(--ui-border)',borderWidth:1,borderStyle:'solid',color:'var(--ui-text-3)'}}
+          >
+            {t('genMode_' + m)}
+          </button>
+        ))}
+      </div>
 
       {/* Quick prompts */}
       <div className="px-4 pb-2 flex flex-wrap gap-1.5 flex-shrink-0">

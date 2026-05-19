@@ -208,7 +208,23 @@ function SlideEditor({ slide, onClose, onUpdate, onPreview, lang }) {
         <button onClick={cancel} className="w-6 h-6 flex items-center justify-center ui-text-4 hover:ui-text text-sm">✕</button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+      {draft.soloHtml ? (
+        /* Solo slide: show raw HTML editor */
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <div className="px-4 py-2 flex items-center gap-2 flex-shrink-0" style={{borderBottom:'1px solid var(--ui-border)'}}>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{background:'var(--ui-primary)',color:'#fff'}}>S</span>
+            <span className="text-xs ui-text-3">{t('soloSlide')}</span>
+          </div>
+          <textarea
+            value={draft.soloHtml}
+            onChange={e => setDraft(d => ({ ...d, soloHtml: e.target.value }))}
+            className="flex-1 w-full bg-transparent px-4 py-3 text-xs ui-text font-mono resize-none focus:outline-none"
+            style={{caretColor:'var(--ui-primary)'}}
+            spellCheck={false}
+          />
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
         {/* Slide meta */}
         <div className="flex gap-3">
           <div className="flex-1">
@@ -255,6 +271,7 @@ function SlideEditor({ slide, onClose, onUpdate, onPreview, lang }) {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -337,8 +354,12 @@ function ThumbnailStrip({ slides, currentIndex, onGoTo, onReorder, onAdd, onDupl
         <div key={slide.id || i} draggable onDragStart={(e) => handleDragStart(e, i)} onDragOver={(e) => handleDragOver(e, i)} onDrop={(e) => handleDrop(e, i)} onDragEnd={handleDragEnd} onContextMenu={(e) => handleContextMenu(e, i)}
           style={{ outline: dragOver === i && dragFrom.current !== i ? '2px solid var(--ui-primary)' : 'none', borderRadius: '6px', transition: 'outline 0.1s' }}>
           <button onClick={() => onGoTo(i)} className={`slide-thumb w-24 flex-shrink-0 no-drag ${i === currentIndex ? 'active' : ''}`}
-            title={`Slide ${i + 1} — right-click for options`}>
+            title={`Slide ${i + 1} — right-click for options`} style={{position:'relative'}}>
             <ThumbnailSlide slide={slide} />
+            {slide.soloHtml && (
+              <div style={{position:'absolute',top:3,right:3,background:'var(--ui-primary)',color:'#fff',
+                fontSize:'7px',fontWeight:'bold',padding:'1px 3px',borderRadius:'2px',lineHeight:'1.4',pointerEvents:'none'}}>S</div>
+            )}
           </button>
           <div className="text-center text-[10px] ui-text-4 mt-0.5 select-none">{i + 1}</div>
         </div>
