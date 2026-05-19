@@ -686,35 +686,43 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
     // Capture each slide by showing it and screenshotting
     const jpegs = [];
     for (let i = 0; i < slides.length; i++) {
-      const isSolo = !!slides[i].soloHtml;
-      await offscreen.webContents.executeJavaScript(`
-        document.querySelectorAll('.slide-page').forEach(function(el, j) {
-          el.style.display = j === ${i} ? 'flex' : 'none';
+      const slide = slides[i];
+      if (slide.soloHtml) {
+        // Solo slide: open a dedicated offscreen window, load the full HTML document,
+        // wait for did-finish-load, then capturePage — same approach as template slides.
+        const soloWin = new BrowserWindow({
+          width: W, height: H,
+          x: -W - 100, y: 0,
+          frame: false, skipTaskbar: true,
+          webPreferences: { contextIsolation: true, deviceScaleFactor: 1 },
         });
-      `);
-      if (isSolo) {
-        // Wait for the iframe's srcdoc to finish loading before capturing
-        await offscreen.webContents.executeJavaScript(`
-          new Promise(function(resolve) {
-            var iframe = document.querySelector('iframe[data-solo="${i}"]');
-            if (!iframe) return resolve();
-            if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
-              setTimeout(resolve, 80);
-            } else {
-              iframe.onload = function() { setTimeout(resolve, 80); };
-              // Fallback: give up waiting after 5s
-              setTimeout(resolve, 5000);
-            }
-          })
-        `);
+        soloWin.showInactive();
+        try {
+          await new Promise((resolve, reject) => {
+            let settled = false;
+            const done = () => { if (!settled) { settled = true; resolve(); } };
+            soloWin.webContents.once('did-finish-load', () => setTimeout(done, 120));
+            soloWin.webContents.once('did-fail-load', (_, code, desc) => reject(new Error(desc || 'solo load failed')));
+            setTimeout(() => reject(new Error('solo slide load timeout')), 10000);
+            soloWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(slide.soloHtml));
+          });
+          const image = await soloWin.webContents.capturePage({ x: 0, y: 0, width: W, height: H });
+          jpegs.push(image.toJPEG(92));
+        } finally {
+          soloWin.destroy();
+        }
       } else {
-        // One rAF tick to ensure repaint
+        await offscreen.webContents.executeJavaScript(`
+          document.querySelectorAll('.slide-page').forEach(function(el, j) {
+            el.style.display = j === ${i} ? 'flex' : 'none';
+          });
+        `);
         await offscreen.webContents.executeJavaScript(
           'new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); })'
         );
+        const image = await offscreen.webContents.capturePage({ x: 0, y: 0, width: W, height: H });
+        jpegs.push(image.toJPEG(92));
       }
-      const image = await offscreen.webContents.capturePage({ x: 0, y: 0, width: W, height: H });
-      jpegs.push(image.toJPEG(92));
     }
 
     const pdfBytes = buildPDFFromJPEGs(jpegs, W, H);
@@ -757,7 +765,7 @@ function buildAllSlidesHTML(slides, w, h) {
     if (s.soloHtml) {
       const escaped = s.soloHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
       return `<div class="slide-page" style="${display}">`
-        + `<iframe data-solo="${i}" srcdoc="${escaped}" style="width:${w}px;height:${h}px;border:none;display:block;" sandbox="allow-scripts allow-same-origin"></iframe>`
+        + `<iframe srcdoc="${escaped}" style="width:${w}px;height:${h}px;border:none;display:block;" sandbox="allow-scripts allow-same-origin"></iframe>`
         + `</div>`;
     }
     const bg = s.background || '#1e1e2e';
