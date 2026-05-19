@@ -248,10 +248,9 @@ Rules:
 
 const SOLO_SLIDE_PROMPT = `You are a world-class presentation designer. Create ONE visually stunning slide as a complete self-contained HTML document.
 
-Respond ONLY with valid JSON — no markdown fences, no explanation:
-{"action":"solo_slide","html":"<full html string>"}
+Output ONLY the raw HTML — starting with <!DOCTYPE html> and nothing else. No JSON, no markdown, no explanation.
 
-Rules for the HTML:
+Rules:
 - Must be a complete <!DOCTYPE html> document
 - Use ONLY inline CSS — no external stylesheets, no CDN links, no @import
 - Slide canvas: body { margin:0; padding:0; width:1920px; height:1080px; overflow:hidden; }
@@ -297,9 +296,10 @@ ipcMain.handle('llm:solo-slide', async (_event, { outlineSlide, allOutline, user
       { role: 'user', content: prompt },
     ];
     const rawText = await callLLM(messages, settings, 8192);
-    const parsed = parseJSONResponse(rawText);
-    if (!parsed || !parsed.html) return { success: false, error: `Solo slide ${slideIndex + 1} parse failed: ${rawText.slice(0, 200)}` };
-    return { success: true, data: { action: 'solo_slide', html: parsed.html }, raw: rawText };
+    // Response is raw HTML — strip markdown fences if the model wrapped it anyway
+    const html = rawText.replace(/^```(?:html)?\s*/m, '').replace(/```\s*$/m, '').trim();
+    if (!html || !html.includes('<')) return { success: false, error: `Solo slide ${slideIndex + 1}: no HTML in response` };
+    return { success: true, data: { action: 'solo_slide', html }, raw: rawText };
   } catch (err) {
     return { success: false, error: err.message };
   }
