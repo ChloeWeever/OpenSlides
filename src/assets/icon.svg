@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480">
-  <!-- Orange square border -->
-  <rect x="40" y="40" width="400" height="400" rx="48" ry="48"
-        fill="none" stroke="#D04000" stroke-width="28"/>
-  <!-- Letter S centered -->
-  <text x="240" y="340" font-family="Arial,Helvetica,sans-serif" font-size="280"
-        font-weight="bold" text-anchor="middle" fill="#D04000">S</text>
-</svg>
