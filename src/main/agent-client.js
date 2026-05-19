@@ -3,7 +3,6 @@
 const { ChatOpenAI } = require('@langchain/openai');
 const { ChatAnthropic } = require('@langchain/anthropic');
 const { tool } = require('@langchain/core/tools');
-const { createReactAgent } = require('@langchain/langgraph/prebuilt');
 const { z } = require('zod');
 
 // ── Prompt constants (mirrors ipc-handlers.js) ────────────────────────────────
@@ -109,7 +108,6 @@ function buildChatModel(settings, tools, maxTokens = 8192) {
   const provider = (settings.apiProvider || 'openai').toLowerCase();
 
   if (provider === 'anthropic') {
-    // Strip any "anthropic/" or "anthropic--" prefix that LiteLLM-style names may include
     const rawModel = settings.modelName || 'claude-3-5-sonnet-20241022';
     const cleanModel = rawModel.replace(/^anthropic[-/]+/i, '');
     log.info(`buildChatModel: anthropic model="${cleanModel}" (raw="${rawModel}")`);
@@ -118,18 +116,16 @@ function buildChatModel(settings, tools, maxTokens = 8192) {
       model: cleanModel,
       maxTokens,
     });
-    // Force the model to call a tool (any tool) — prevents it from generating
-    // plain text and hanging the ReAct loop waiting for a tool call that never comes
     return model.bindTools(tools, { tool_choice: { type: 'any' } });
   }
 
   // openai / litellm
-  // Only override baseURL for non-default endpoints (LiteLLM or custom proxy)
   const defaultOpenAI = /^https?:\/\/api\.openai\.com\/?$/i.test(settings.baseUrl || '');
   const baseUrl = (settings.baseUrl || '').replace(/\/$/, '');
   const configuration = defaultOpenAI || !baseUrl
     ? {}
     : { baseURL: baseUrl.endsWith('/v1') ? baseUrl : baseUrl + '/v1' };
+  log.info(`buildChatModel: openai model="${settings.modelName || 'gpt-4o'}" baseUrl="${baseUrl || '(default)'}"`);
 
   const model = new ChatOpenAI({
     apiKey: settings.apiKey,
@@ -137,8 +133,33 @@ function buildChatModel(settings, tools, maxTokens = 8192) {
     maxTokens,
     ...(Object.keys(configuration).length ? { configuration } : {}),
   });
-  // Force tool use so the agent doesn't loop on plain-text responses
   return model.bindTools(tools, { tool_choice: 'required' });
+}
+
+// ── Direct tool-call runner (no ReAct loop) ───────────────────────────────────
+// For single-turn, single-tool calls we don't need a full agent graph.
+// We call the model once; it must return a tool_use block (forced by tool_choice).
+
+async function invokeWithTool(llm, messages, toolName, label, t0) {
+  log.info(`  invokeWithTool: calling model for "${toolName}"...`);
+  const response = await llm.invoke(messages);
+  log.info(`  invokeWithTool: response type=${response._getType?.() ?? typeof response}, tool_calls=${response.tool_calls?.length ?? 0}`);
+
+  if (response.tool_calls?.length) {
+    response.tool_calls.forEach(tc =>
+      log.info(`    tool_call: ${tc.name}, args keys: ${Object.keys(tc.args || {}).join(', ')}, size: ${JSON.stringify(tc.args).length}`)
+    );
+  }
+
+  const tc = response.tool_calls?.find(t => t.name === toolName);
+  if (!tc) {
+    const preview = typeof response.content === 'string'
+      ? response.content.slice(0, 200)
+      : JSON.stringify(response.content).slice(0, 200);
+    log.error(`  invokeWithTool: no "${toolName}" tool call in response. Content: ${preview}`);
+    throw new Error(`${label}: model did not call ${toolName} tool`);
+  }
+  return tc.args;
 }
 
 // ── Agent runners ─────────────────────────────────────────────────────────────
@@ -164,49 +185,23 @@ Fill ALL body content with real information from the user's original request abo
 Call the generate_slide tool with the complete slide object.`;
 
   const llm = buildChatModel(settings, [generateSlideTool], 4096);
-  const agent = createReactAgent({ llm, tools: [generateSlideTool] });
+  const messages = [
+    { role: 'system', content: SLIDE_GEN_SYSTEM },
+    { role: 'user', content: userPrompt },
+  ];
 
-  let result;
+  let args;
   try {
-    result = await agent.invoke(
-      {
-        messages: [
-          { role: 'system', content: SLIDE_GEN_SYSTEM },
-          { role: 'user', content: userPrompt },
-        ],
-      },
-      { recursionLimit: 5 }
-    );
+    args = await invokeWithTool(llm, messages, 'generate_slide', label, t0);
   } catch (err) {
-    log.error(`✗ genSlide ${label} — invoke failed (${Date.now() - t0}ms):`, err.message);
+    log.error(`✗ genSlide ${label} — failed (${Date.now() - t0}ms):`, err.message);
     throw err;
   }
 
-  // Log all messages for debugging
-  result.messages.forEach((m, i) => {
-    const role = m._getType ? m._getType() : (m.role || m.constructor?.name || 'msg');
-    const preview = typeof m.content === 'string'
-      ? m.content.slice(0, 120).replace(/\n/g, '↵')
-      : JSON.stringify(m.content).slice(0, 120);
-    log.info(`  [${i}] ${role}: ${preview}`);
-    if (m.tool_calls?.length) {
-      m.tool_calls.forEach(tc => log.info(`       → tool_call: ${tc.name}`, JSON.stringify(tc.args).slice(0, 200)));
-    }
-  });
-
-  const toolMsg = result.messages.slice().reverse().find(m => m.name === 'generate_slide');
-  if (!toolMsg) {
-    log.error(`✗ genSlide ${label} — no generate_slide tool message found`);
-    throw new Error(`Slide ${slideIndex + 1}: agent did not call generate_slide tool`);
-  }
-
-  const raw = typeof toolMsg.content === 'string' ? toolMsg.content : JSON.stringify(toolMsg.content);
-  let slide;
-  try {
-    slide = JSON.parse(raw);
-  } catch (err) {
-    log.error(`✗ genSlide ${label} — JSON.parse failed:`, raw.slice(0, 300));
-    throw new Error(`Slide ${slideIndex + 1}: failed to parse tool result as JSON`);
+  const slide = args.slide;
+  if (!slide) {
+    log.error(`✗ genSlide ${label} — args.slide missing, args keys: ${Object.keys(args).join(', ')}`);
+    throw new Error(`Slide ${slideIndex + 1}: tool args missing slide field`);
   }
 
   log.info(`✓ genSlide ${label} — ${slide.elements?.length ?? 0} elements (${Date.now() - t0}ms)`);
@@ -226,42 +221,20 @@ This is slide ${slideIndex + 1} of ${totalSlides}
 Call the generate_solo_html tool with the complete HTML document.`;
 
   const llm = buildChatModel(settings, [generateSoloHtmlTool], 8192);
-  const agent = createReactAgent({ llm, tools: [generateSoloHtmlTool] });
+  const messages = [
+    { role: 'system', content: SOLO_SLIDE_SYSTEM },
+    { role: 'user', content: userPrompt },
+  ];
 
-  let result;
+  let args;
   try {
-    result = await agent.invoke(
-      {
-        messages: [
-          { role: 'system', content: SOLO_SLIDE_SYSTEM },
-          { role: 'user', content: userPrompt },
-        ],
-      },
-      { recursionLimit: 5 }
-    );
+    args = await invokeWithTool(llm, messages, 'generate_solo_html', label, t0);
   } catch (err) {
-    log.error(`✗ genSoloSlide ${label} — invoke failed (${Date.now() - t0}ms):`, err.message);
+    log.error(`✗ genSoloSlide ${label} — failed (${Date.now() - t0}ms):`, err.message);
     throw err;
   }
 
-  result.messages.forEach((m, i) => {
-    const role = m._getType ? m._getType() : (m.role || m.constructor?.name || 'msg');
-    const preview = typeof m.content === 'string'
-      ? m.content.slice(0, 80).replace(/\n/g, '↵')
-      : JSON.stringify(m.content).slice(0, 80);
-    log.info(`  [${i}] ${role}: ${preview}`);
-    if (m.tool_calls?.length) {
-      m.tool_calls.forEach(tc => log.info(`       → tool_call: ${tc.name}, html length: ${tc.args?.html?.length ?? 'n/a'}`));
-    }
-  });
-
-  const toolMsg = result.messages.slice().reverse().find(m => m.name === 'generate_solo_html');
-  if (!toolMsg) {
-    log.error(`✗ genSoloSlide ${label} — no generate_solo_html tool message found`);
-    throw new Error(`Solo slide ${slideIndex + 1}: agent did not call generate_solo_html tool`);
-  }
-
-  const html = typeof toolMsg.content === 'string' ? toolMsg.content : String(toolMsg.content);
+  const html = typeof args.html === 'string' ? args.html : String(args.html ?? '');
   if (!html || !html.includes('<')) {
     log.error(`✗ genSoloSlide ${label} — empty or invalid HTML (${html?.length ?? 0} chars)`);
     throw new Error(`Solo slide ${slideIndex + 1}: empty HTML returned`);
