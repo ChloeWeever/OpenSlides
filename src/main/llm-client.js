@@ -85,7 +85,30 @@ function parseJSONResponse(text) {
     return null;
   };
 
-  return tryExtract(stripped) || tryExtract(text);
+  const result = tryExtract(stripped) || tryExtract(text);
+  if (result) return result;
+
+  // Last resort: if JSON parse failed due to soloHtml containing unescaped chars,
+  // extract action + slideId + soloHtml by splitting on the known key boundary
+  const soloMatch = stripped.match(/"action"\s*:\s*"update_slide"/) &&
+                    stripped.match(/"slideId"\s*:\s*"([^"]+)"/);
+  if (soloMatch) {
+    const slideId = soloMatch[1];
+    // Find soloHtml value: everything between "soloHtml": " and the last "}
+    const htmlStart = stripped.indexOf('"soloHtml"');
+    if (htmlStart !== -1) {
+      const valStart = stripped.indexOf('"', htmlStart + 10) + 1;
+      // Walk backwards from end to find the closing structure
+      const jsonEnd = stripped.lastIndexOf('"}');
+      if (valStart > 0 && jsonEnd > valStart) {
+        // Unescape the extracted string value
+        let html = stripped.slice(valStart, jsonEnd).replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\\\/g, '\\');
+        return { action: 'update_slide', slideId, slide: { soloHtml: html } };
+      }
+    }
+  }
+
+  return null;
 }
 
 module.exports = { callLLM, parseJSONResponse };

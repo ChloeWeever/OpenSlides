@@ -311,6 +311,22 @@ ipcMain.handle('llm:chat', async (_event, messages, settings) => {
     const allMessages = [{ role: 'system', content: SYSTEM_PROMPT }, ...messages];
     const rawText = await callLLM(allMessages, settings);
     const parsed = parseJSONResponse(rawText);
+    // If still null but rawText looks like an update_slide with soloHtml, try harder
+    if (!parsed && rawText.includes('soloHtml') && rawText.includes('update_slide')) {
+      const slideIdM = rawText.match(/"slideId"\s*:\s*"([^"]+)"/);
+      const htmlStartIdx = rawText.indexOf('"soloHtml"');
+      if (slideIdM && htmlStartIdx !== -1) {
+        // Find the opening quote of the value
+        const valQ = rawText.indexOf('"', htmlStartIdx + 10) + 1;
+        // The html value ends at the last }" in the response
+        const tailIdx = rawText.lastIndexOf('"}');
+        if (valQ > 0 && tailIdx > valQ) {
+          const rawVal = rawText.slice(valQ, tailIdx);
+          const html = rawVal.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\\\/g, '\\');
+          return { success: true, data: { action: 'update_slide', slideId: slideIdM[1], slide: { soloHtml: html } }, raw: rawText };
+        }
+      }
+    }
     return { success: true, data: parsed, raw: rawText };
   } catch (err) {
     return { success: false, error: err.message };
