@@ -4,13 +4,28 @@ const DEFAULT_SLIDES = [
   {
     id: 'slide-1',
     layout: 'title',
-    background: '#1e1e2e',
-    color: '#cdd6f4',
     transition: 'slide',
     elements: [
-      { type: 'heading', text: 'Welcome to OpenSlides' },
+      { type: 'kicker', text: 'Welcome' },
+      { type: 'heading', text: 'OpenSlides', gradient: true },
       { type: 'subheading', text: 'AI-powered presentation editor' },
-      { type: 'body', text: 'Start a conversation to generate your presentation.' },
+      { type: 'divider' },
+      { type: 'pills', items: [{ text: 'AI', accent: true }, 'Electron', 'React'] },
+    ],
+  },
+  {
+    id: 'slide-2',
+    layout: 'content',
+    transition: 'slide',
+    elements: [
+      { type: 'kicker', text: 'Get started' },
+      { type: 'heading', text: 'How to use' },
+      { type: 'bullets', items: [
+        'Describe your presentation in the chat panel',
+        'AI generates structured slides instantly',
+        'Click any element to select and edit it',
+        'Use Ctrl+Z / Ctrl+Y for undo & redo',
+      ]},
     ],
   },
 ];
