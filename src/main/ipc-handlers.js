@@ -584,7 +584,22 @@ function buildSlideDiv(slide, extraClass) {
   const color = slide.color || '#cdd6f4';
   const layout = slide.layout || 'content';
   const inner = renderElements(slide.elements, layout, slide.sectionNum);
-  return `<div class="slide-container layout-${layout}${extraClass?' '+extraClass:''}" style="background:${bg};color:${color}">${inner}</div>`;
+  const tv = slide.themeVars;
+  const tvStyle = tv ? [
+    tv.accent    ? `--accent:${tv.accent}`     : '',
+    tv.accent2   ? `--accent-2:${tv.accent2}`  : '',
+    tv.accent3   ? `--accent-3:${tv.accent3}`  : '',
+    tv.grad      ? `--grad:${tv.grad}`          : '',
+    tv.gradSoft  ? `--grad-soft:${tv.gradSoft}` : '',
+    tv.surface   ? `--surface:${tv.surface}`    : '',
+    tv.surface2  ? `--surface-2:${tv.surface2}` : '',
+    tv.border    ? `--border:${tv.border}`      : '',
+    tv.text1     ? `--text-1:${tv.text1}`       : '',
+    tv.text2     ? `--text-2:${tv.text2}`       : '',
+    tv.text3     ? `--text-3:${tv.text3}`       : '',
+  ].filter(Boolean).join(';') : '';
+  const style = `background:${bg};color:${color}${tvStyle ? ';' + tvStyle : ''}`;
+  return `<div class="slide-container layout-${layout}${extraClass?' '+extraClass:''}" style="${style}">${inner}</div>`;
 }
 
 function buildStandaloneHTML(slides, title) {

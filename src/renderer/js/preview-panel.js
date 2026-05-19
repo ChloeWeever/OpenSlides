@@ -2,6 +2,93 @@
 
 const TRANSITIONS = ['none', 'slide', 'fade', 'zoom'];
 
+// ── Colour themes ──────────────────────────────────────────────────────────────
+const THEMES = [
+  {
+    id: 'catppuccin',
+    name: 'Catppuccin',
+    bg: ['#0f0f1a', '#13131f'],
+    color: '#cdd6f4',
+    swatch: ['#0f0f1a', '#89b4fa', '#cba6f7'],
+    themeVars: { accent:'#89b4fa', accent2:'#cba6f7', accent3:'#f38ba8', grad:'linear-gradient(135deg,#89b4fa,#cba6f7 55%,#f38ba8)', gradSoft:'linear-gradient(135deg,rgba(137,180,250,.15),rgba(203,166,247,.12) 55%,rgba(243,139,168,.1))', surface:'rgba(137,180,250,.08)', surface2:'rgba(203,166,247,.08)', border:'rgba(255,255,255,.08)' },
+  },
+  {
+    id: 'midnight',
+    name: 'Midnight',
+    bg: ['#080c14', '#0c1020'],
+    color: '#e2e8f8',
+    swatch: ['#080c14', '#38bdf8', '#818cf8'],
+    themeVars: { accent:'#38bdf8', accent2:'#818cf8', accent3:'#fb7185', grad:'linear-gradient(135deg,#38bdf8,#818cf8 55%,#fb7185)', gradSoft:'linear-gradient(135deg,rgba(56,189,248,.15),rgba(129,140,248,.12) 55%,rgba(251,113,133,.1))', surface:'rgba(56,189,248,.08)', surface2:'rgba(129,140,248,.08)', border:'rgba(255,255,255,.08)' },
+  },
+  {
+    id: 'forest',
+    name: 'Forest',
+    bg: ['#0a120e', '#0d1912'],
+    color: '#d4f0e0',
+    swatch: ['#0a120e', '#4ade80', '#34d399'],
+    themeVars: { accent:'#4ade80', accent2:'#34d399', accent3:'#a3e635', grad:'linear-gradient(135deg,#4ade80,#34d399 55%,#a3e635)', gradSoft:'linear-gradient(135deg,rgba(74,222,128,.15),rgba(52,211,153,.12) 55%,rgba(163,230,53,.1))', surface:'rgba(74,222,128,.08)', surface2:'rgba(52,211,153,.08)', border:'rgba(255,255,255,.07)' },
+  },
+  {
+    id: 'ember',
+    name: 'Ember',
+    bg: ['#150a06', '#1c0f08'],
+    color: '#fde8d8',
+    swatch: ['#150a06', '#fb923c', '#f43f5e'],
+    themeVars: { accent:'#fb923c', accent2:'#f43f5e', accent3:'#fbbf24', grad:'linear-gradient(135deg,#fb923c,#f43f5e 55%,#fbbf24)', gradSoft:'linear-gradient(135deg,rgba(251,146,60,.15),rgba(244,63,94,.12) 55%,rgba(251,191,36,.1))', surface:'rgba(251,146,60,.08)', surface2:'rgba(244,63,94,.08)', border:'rgba(255,255,255,.07)' },
+  },
+  {
+    id: 'rose',
+    name: 'Rose Gold',
+    bg: ['#140d10', '#1c1118'],
+    color: '#fce7f3',
+    swatch: ['#140d10', '#f472b6', '#e879f9'],
+    themeVars: { accent:'#f472b6', accent2:'#e879f9', accent3:'#fb7185', grad:'linear-gradient(135deg,#f472b6,#e879f9 55%,#fb7185)', gradSoft:'linear-gradient(135deg,rgba(244,114,182,.15),rgba(232,121,249,.12) 55%,rgba(251,113,133,.1))', surface:'rgba(244,114,182,.08)', surface2:'rgba(232,121,249,.08)', border:'rgba(255,255,255,.07)' },
+  },
+  {
+    id: 'slate',
+    name: 'Slate',
+    bg: ['#0f1117', '#141720'],
+    color: '#e2e8f0',
+    swatch: ['#0f1117', '#94a3b8', '#64748b'],
+    themeVars: { accent:'#94a3b8', accent2:'#cbd5e1', accent3:'#7dd3fc', grad:'linear-gradient(135deg,#94a3b8,#cbd5e1 55%,#7dd3fc)', gradSoft:'linear-gradient(135deg,rgba(148,163,184,.15),rgba(203,213,225,.12) 55%,rgba(125,211,252,.1))', surface:'rgba(148,163,184,.08)', surface2:'rgba(203,213,225,.08)', border:'rgba(255,255,255,.07)' },
+  },
+  {
+    id: 'light',
+    name: 'Light',
+    bg: ['#f8f9fc', '#f0f2f8'],
+    color: '#111827',
+    swatch: ['#f8f9fc', '#6366f1', '#ec4899'],
+    themeVars: { accent:'#6366f1', accent2:'#8b5cf6', accent3:'#ec4899', grad:'linear-gradient(135deg,#6366f1,#8b5cf6 55%,#ec4899)', gradSoft:'linear-gradient(135deg,rgba(99,102,241,.12),rgba(139,92,246,.1) 55%,rgba(236,72,153,.08))', surface:'rgba(99,102,241,.08)', surface2:'rgba(139,92,246,.06)', border:'rgba(0,0,0,.08)', text1:'#111827', text2:'#374151', text3:'#6b7280' },
+  },
+  {
+    id: 'corporate',
+    name: 'Corporate',
+    bg: ['#f5f7fa', '#eef1f7'],
+    color: '#0f172a',
+    swatch: ['#f5f7fa', '#2563eb', '#0ea5e9'],
+    themeVars: { accent:'#2563eb', accent2:'#0ea5e9', accent3:'#6366f1', grad:'linear-gradient(135deg,#2563eb,#0ea5e9 55%,#6366f1)', gradSoft:'linear-gradient(135deg,rgba(37,99,235,.12),rgba(14,165,233,.1) 55%,rgba(99,102,241,.08))', surface:'rgba(37,99,235,.06)', surface2:'rgba(14,165,233,.05)', border:'rgba(0,0,0,.07)', text1:'#0f172a', text2:'#1e3a5f', text3:'#475569' },
+  },
+];
+
+function ThemeSwatch({ theme, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      title={theme.name}
+      className={`relative flex flex-col items-center gap-1.5 p-2 rounded-lg transition-all ${active ? 'bg-[#6366f1]/20 ring-1 ring-[#6366f1]' : 'hover:bg-[#2a2a3a]'}`}
+    >
+      <div className="w-12 h-8 rounded-md overflow-hidden flex-shrink-0" style={{ background: theme.swatch[0] }}>
+        <div className="w-full h-full flex">
+          <div className="flex-1" style={{ background: theme.swatch[0] }} />
+          <div className="w-3" style={{ background: theme.swatch[1] }} />
+          <div className="w-2" style={{ background: theme.swatch[2] }} />
+        </div>
+      </div>
+      <span className="text-[9px] text-[#8888a8] leading-none whitespace-nowrap">{theme.name}</span>
+    </button>
+  );
+}
+
 function ThumbnailSlide({ slide }) {
   return (
     <div
@@ -402,10 +489,36 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
   const [viewportSize, setViewportSize] = React.useState({ width: 0, height: 0 });
   const [selectedTransition, setSelectedTransition] = React.useState(currentSlide?.transition || 'slide');
   const [showTransitions, setShowTransitions] = React.useState(false);
+  const [showThemes, setShowThemes] = React.useState(false);
+  const [activeThemeId, setActiveThemeId] = React.useState('catppuccin');
   const [fullscreen, setFullscreen] = React.useState(false);
   const [showImagePicker, setShowImagePicker] = React.useState(false);
   const [uploadingImage, setUploadingImage] = React.useState(false);
   const imagePickerRef = React.useRef(null);
+  const themePickerRef = React.useRef(null);
+
+  // Apply a theme to all slides
+  const applyTheme = React.useCallback((theme) => {
+    setActiveThemeId(theme.id);
+    setShowThemes(false);
+    const newSlides = slides.map((s, i) => ({
+      ...s,
+      background: theme.bg[i % theme.bg.length],
+      color: theme.color,
+      themeVars: theme.themeVars,
+    }));
+    onApplyAction({ action: 'replace_all', slides: newSlides });
+  }, [slides, onApplyAction]);
+
+  // Close theme picker on outside click
+  React.useEffect(() => {
+    if (!showThemes) return;
+    const handler = (e) => {
+      if (themePickerRef.current && !themePickerRef.current.contains(e.target)) setShowThemes(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showThemes]);
 
   // Fit 16:9 iframe to available container space
   React.useEffect(() => {
@@ -567,10 +680,41 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
           )}
         </div>
 
+        {/* Theme picker */}
+        <div ref={themePickerRef} className="relative">
+          <button
+            onClick={() => { setShowThemes((v) => !v); setShowTransitions(false); }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-all ${showThemes ? 'bg-[#6366f1] text-white border-[#6366f1]' : 'text-[#8888a8] hover:text-white hover:bg-[#2a2a3a] border-[#2a2a3a]'}`}
+            title="Color theme"
+          >
+            <span className="flex gap-0.5">
+              {(THEMES.find(t => t.id === activeThemeId) || THEMES[0]).swatch.map((c, i) => (
+                <span key={i} className="w-2.5 h-2.5 rounded-full" style={{ background: c }} />
+              ))}
+            </span>
+            Theme
+          </button>
+          {showThemes && (
+            <div className="absolute left-0 top-full mt-1 bg-[#1c1c28] border border-[#2a2a3a] rounded-xl shadow-2xl z-20 p-2" style={{ width: 300 }}>
+              <div className="text-[10px] text-[#4a4a6a] uppercase tracking-wider mb-2 px-1">Color Theme</div>
+              <div className="grid grid-cols-4 gap-1">
+                {THEMES.map((theme) => (
+                  <ThemeSwatch
+                    key={theme.id}
+                    theme={theme}
+                    active={activeThemeId === theme.id}
+                    onClick={() => applyTheme(theme)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Transition picker */}
         <div className="relative">
           <button
-            onClick={() => setShowTransitions((v) => !v)}
+            onClick={() => { setShowTransitions((v) => !v); setShowThemes(false); }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-[#8888a8] hover:text-white hover:bg-[#2a2a3a] border border-[#2a2a3a] transition-all"
           >
             ✦ {selectedTransition}

@@ -4,10 +4,51 @@ const next = document.getElementById('slide-next');
 let currentSlide = null;
 let selectedIndex = null;
 
+// Resolved theme colors — updated from the slide container before each render
+// so diagram/chart renderers always use the correct theme colors
+let themeColors = {
+  text1: '#cdd6f4',
+  text2: '#a6adc8',
+  text3: '#6c7086',
+  accent: '#89b4fa',
+  border: 'rgba(255,255,255,.08)',
+};
+
+function resolveThemeColors(container) {
+  const cs = getComputedStyle(container);
+  const get = (v, fallback) => cs.getPropertyValue(v).trim() || fallback;
+  themeColors = {
+    text1:  get('--text-1', '#cdd6f4'),
+    text2:  get('--text-2', '#a6adc8'),
+    text3:  get('--text-3', '#6c7086'),
+    accent: get('--accent',  '#89b4fa'),
+    border: get('--border',  'rgba(255,255,255,.08)'),
+  };
+}
+
 function renderSlide(container, slide) {
   container.className = `slide-container layout-${slide.layout || 'content'}`;
   container.style.background = slide.background || '';
   container.style.color = slide.color || '';
+  // Apply per-slide CSS variable overrides for accent/gradient theming
+  const tv = slide.themeVars;
+  if (tv) {
+    container.style.setProperty('--accent',   tv.accent   || '');
+    container.style.setProperty('--accent-2', tv.accent2  || '');
+    container.style.setProperty('--accent-3', tv.accent3  || '');
+    container.style.setProperty('--grad',     tv.grad     || '');
+    container.style.setProperty('--grad-soft',tv.gradSoft || '');
+    container.style.setProperty('--surface',  tv.surface  || '');
+    container.style.setProperty('--surface-2',tv.surface2 || '');
+    container.style.setProperty('--border',   tv.border   || '');
+    container.style.setProperty('--text-1',   tv.text1    || '');
+    container.style.setProperty('--text-2',   tv.text2    || '');
+    container.style.setProperty('--text-3',   tv.text3    || '');
+  } else {
+    ['--accent','--accent-2','--accent-3','--grad','--grad-soft','--surface','--surface-2','--border','--text-1','--text-2','--text-3']
+      .forEach(v => container.style.removeProperty(v));
+  }
+  resolveThemeColors(container);
   container.innerHTML = '';
 
   // Section number watermark for section layout
@@ -311,6 +352,11 @@ function renderChartJS(container, el) {
   canvas.style.cssText = 'max-width:100%;max-height:52vh;';
   container.appendChild(canvas);
 
+  const { text1, text2, accent } = themeColors;
+  const gridColor = text2.startsWith('#')
+    ? text2 + '22'
+    : text2.replace(')', ', .13)').replace('rgb(', 'rgba(');
+
   const datasets = (el.datasets || []).map((d, i) => {
     const color = d.color || CHART_PALETTE[i % CHART_PALETTE.length];
     const isPie = el.kind === 'pie' || el.kind === 'doughnut';
@@ -336,15 +382,15 @@ function renderChartJS(container, el) {
       animation: { duration: 600 },
       plugins: {
         legend: {
-          labels: { color: '#a6adc8', font: { size: 13 }, padding: 16 },
+          labels: { color: text2, font: { size: 13 }, padding: 16 },
         },
         title: el.title
-          ? { display: true, text: el.title, color: '#cdd6f4', font: { size: 15, weight: '600' }, padding: { bottom: 12 } }
+          ? { display: true, text: el.title, color: text1, font: { size: 15, weight: '600' }, padding: { bottom: 12 } }
           : { display: false },
       },
       scales: isPie ? {} : {
-        x: { ticks: { color: '#a6adc8', font: { size: 12 } }, grid: { color: 'rgba(255,255,255,.07)' } },
-        y: { ticks: { color: '#a6adc8', font: { size: 12 } }, grid: { color: 'rgba(255,255,255,.07)' } },
+        x: { ticks: { color: text2, font: { size: 12 } }, grid: { color: gridColor } },
+        y: { ticks: { color: text2, font: { size: 12 } }, grid: { color: gridColor } },
       },
     },
   });
@@ -470,6 +516,12 @@ function renderFlow(el) {
   svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
   svg.style.cssText = 'width:100%;max-height:52vh;';
 
+  const { text1, accent } = themeColors;
+  // Node fill: accent at low opacity; works for both dark and light themes
+  const nodeFill = accent.startsWith('#')
+    ? accent + '1a'
+    : accent.replace('rgb(', 'rgba(').replace(')', ', .10)');
+
   // Arrow marker
   const defs = document.createElementNS(ns, 'defs');
   const marker = document.createElementNS(ns, 'marker');
@@ -481,7 +533,7 @@ function renderFlow(el) {
   marker.setAttribute('orient', 'auto');
   const arrowPath = document.createElementNS(ns, 'path');
   arrowPath.setAttribute('d', 'M0,0 L0,6 L8,3 z');
-  arrowPath.setAttribute('fill', '#89b4fa');
+  arrowPath.setAttribute('fill', accent);
   arrowPath.setAttribute('opacity', '0.8');
   marker.appendChild(arrowPath);
   defs.appendChild(marker);
@@ -500,7 +552,7 @@ function renderFlow(el) {
     const path = document.createElementNS(ns, 'path');
     path.setAttribute('d', `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
     path.setAttribute('fill', 'none');
-    path.setAttribute('stroke', '#89b4fa');
+    path.setAttribute('stroke', accent);
     path.setAttribute('stroke-width', '1.5');
     path.setAttribute('stroke-opacity', '0.6');
     path.setAttribute('marker-end', 'url(#arrow)');
@@ -521,8 +573,8 @@ function renderFlow(el) {
     rect.setAttribute('height', info.bh);
     rect.setAttribute('rx', '8');
     rect.setAttribute('ry', '8');
-    rect.setAttribute('fill', 'rgba(137,180,250,.12)');
-    rect.setAttribute('stroke', '#89b4fa');
+    rect.setAttribute('fill', nodeFill);
+    rect.setAttribute('stroke', accent);
     rect.setAttribute('stroke-width', '1.5');
     g.appendChild(rect);
 
@@ -536,7 +588,7 @@ function renderFlow(el) {
       txt.setAttribute('y', startY + li * lineH);
       txt.setAttribute('text-anchor', 'middle');
       txt.setAttribute('dominant-baseline', 'auto');
-      txt.setAttribute('fill', '#cdd6f4');
+      txt.setAttribute('fill', text1);
       txt.setAttribute('font-size', String(FONT_SIZE));
       txt.setAttribute('font-family', 'Inter,"Noto Sans SC",system-ui,sans-serif');
       txt.textContent = line;
@@ -587,6 +639,8 @@ function renderMindmap(el) {
 
   function drawNode(info) {
     const { x, y, bw, bh, lines, lineH, fs, PAD_Y, isRoot, color } = info;
+    const { text1, accent } = themeColors;
+    const rootFill = accent.startsWith('#') ? accent + '33' : accent.replace('rgb(', 'rgba(').replace(')', ', .20)');
     const g = document.createElementNS(ns, 'g');
     const rect = document.createElementNS(ns, 'rect');
     rect.setAttribute('x', x - bw / 2);
@@ -594,8 +648,8 @@ function renderMindmap(el) {
     rect.setAttribute('width', bw);
     rect.setAttribute('height', bh);
     rect.setAttribute('rx', isRoot ? '12' : '8');
-    rect.setAttribute('fill', isRoot ? 'rgba(137,180,250,.2)' : `${color}22`);
-    rect.setAttribute('stroke', isRoot ? '#89b4fa' : color);
+    rect.setAttribute('fill', isRoot ? rootFill : `${color}22`);
+    rect.setAttribute('stroke', isRoot ? accent : color);
     rect.setAttribute('stroke-width', isRoot ? '2' : '1.5');
     g.appendChild(rect);
     const totalTextH = lines.length * lineH;
@@ -606,7 +660,7 @@ function renderMindmap(el) {
       txt.setAttribute('y', startY + li * lineH);
       txt.setAttribute('text-anchor', 'middle');
       txt.setAttribute('dominant-baseline', 'auto');
-      txt.setAttribute('fill', '#cdd6f4');
+      txt.setAttribute('fill', text1);
       txt.setAttribute('font-size', fs);
       txt.setAttribute('font-weight', isRoot ? '700' : '500');
       txt.setAttribute('font-family', 'Inter,"Noto Sans SC",system-ui,sans-serif');
