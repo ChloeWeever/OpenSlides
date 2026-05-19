@@ -209,7 +209,6 @@ function SlideEditor({ slide, onClose, onUpdate, onPreview, lang }) {
       </div>
 
       {draft.soloHtml ? (
-        /* Solo slide: show raw HTML editor */
         <div className="flex flex-col flex-1 overflow-hidden">
           <div className="px-4 py-2 flex items-center gap-2 flex-shrink-0" style={{borderBottom:'1px solid var(--ui-border)'}}>
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{background:'var(--ui-primary)',color:'#fff'}}>S</span>
@@ -224,7 +223,7 @@ function SlideEditor({ slide, onClose, onUpdate, onPreview, lang }) {
           />
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
         {/* Slide meta */}
         <div className="flex gap-3">
           <div className="flex-1">
@@ -535,6 +534,7 @@ function ImageTray({ slide, onApplyAction }) {
 function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, onPrev, onGoTo, onReorder, onApplyAction, onSave, onElementSelected, canUndo, canRedo, onUndo, onRedo, showEditor, onOpenEditor, onCloseEditor, onRegisterPreview, lang }) {
   const iframeRef = React.useRef(null);
   const viewportContainerRef = React.useRef(null);
+  const [viewportSize, setViewportSize] = React.useState({ width: 0, height: 0 });
   const [selectedTransition, setSelectedTransition] = React.useState(currentSlide?.transition || 'slide');
   const [showTransitions, setShowTransitions] = React.useState(false);
   const [showThemes, setShowThemes] = React.useState(false);
@@ -587,6 +587,22 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showThemes]);
+
+  React.useEffect(() => {
+    const el = viewportContainerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      const pad = 48;
+      const availW = width - pad, availH = height - pad;
+      const byWidth = { w: availW, h: availW * 9 / 16 };
+      const byHeight = { w: availH * 16 / 9, h: availH };
+      const fit = byHeight.w <= availW ? byHeight : byWidth;
+      setViewportSize({ width: Math.round(fit.w), height: Math.round(fit.h) });
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   React.useEffect(() => {
     if (!showImagePicker) return;
@@ -788,14 +804,12 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
         </button>
       </div>
 
-      {/* Slide viewport — pure CSS sizing to avoid ResizeObserver→iframe resize→layout flash */}
-      <div ref={viewportContainerRef} className="flex-1 flex items-center justify-center overflow-hidden" style={{padding:'24px'}}>
-        <div style={{position:'relative',width:'100%',maxHeight:'100%',aspectRatio:'16/9',maxWidth:'calc((100vh - 160px) * 16 / 9)'}}>
-          <iframe ref={iframeRef} className="slide-viewport" src="slide-frame/slide-frame.html" title="Slide Preview"
-            sandbox="allow-scripts allow-same-origin"
-            style={{position:'absolute',inset:0,width:'100%',height:'100%',border:'none'}}
-          />
-        </div>
+      {/* Slide viewport */}
+      <div ref={viewportContainerRef} className="flex-1 flex items-center justify-center overflow-hidden">
+        <iframe ref={iframeRef} className="slide-viewport" src="slide-frame/slide-frame.html" title="Slide Preview"
+          sandbox="allow-scripts allow-same-origin"
+          style={viewportSize.width > 0 ? { width: viewportSize.width, height: viewportSize.height } : { width: '100%', aspectRatio: '16/9' }}
+        />
       </div>
 
       <ImageTray slide={currentSlide} onApplyAction={onApplyAction} />

@@ -355,8 +355,6 @@ function renderChartJS(container, el) {
     container.innerHTML = '<div style="color:#f38ba8;font-size:13px;padding:16px">Chart.js not loaded</div>';
     return;
   }
-  // Fixed dimensions — responsive:true would attach a ResizeObserver that causes
-  // a post-paint reflow which pushes slide elements outward
   const isPie = el.kind === 'pie' || el.kind === 'doughnut';
   const W = isPie ? 400 : 640;
   const H = isPie ? 360 : 340;
@@ -373,7 +371,6 @@ function renderChartJS(container, el) {
 
   const datasets = (el.datasets || []).map((d, i) => {
     const color = d.color || CHART_PALETTE[i % CHART_PALETTE.length];
-    const isPie = el.kind === 'pie' || el.kind === 'doughnut';
     return {
       label: d.label || '',
       data: d.data || [],
@@ -386,6 +383,7 @@ function renderChartJS(container, el) {
     };
   });
 
+  const isPie2 = el.kind === 'pie' || el.kind === 'doughnut';
   new Chart(canvas, {
     type: el.kind,
     data: { labels: el.labels || [], datasets },
@@ -400,7 +398,7 @@ function renderChartJS(container, el) {
           ? { display: true, text: el.title, color: text1, font: { size: 15, weight: '600' }, padding: { bottom: 12 } }
           : { display: false },
       },
-      scales: isPie ? {} : {
+      scales: isPie2 ? {} : {
         x: { ticks: { color: text2, font: { size: 12 } }, grid: { color: gridColor } },
         y: { ticks: { color: text2, font: { size: 12 } }, grid: { color: gridColor } },
       },
@@ -827,7 +825,6 @@ function showSlideSimple(slide, direction) {
   }
 
   // No transition: render directly into current
-  // Also skip animation if re-rendering the same slide, or direction is 'none' (programmatic load)
   if (!currentSlide || !slide.transition || slide.transition === 'none' || direction === 'none' || currentSlide?.id === slide.id) {
     renderSlide(current, slide);
     current.classList.remove('hidden');
