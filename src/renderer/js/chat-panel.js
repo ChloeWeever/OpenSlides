@@ -403,6 +403,20 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
             {t('genMode_' + m)}
           </button>
         ))}
+        <div className="relative" style={{display:'inline-flex'}}>
+          <span className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold cursor-default ui-text-4"
+            style={{background:'var(--ui-bg-5)',lineHeight:1}}
+            onMouseEnter={e => e.currentTarget.nextSibling.style.display='block'}
+            onMouseLeave={e => e.currentTarget.nextSibling.style.display='none'}>?</span>
+          <div style={{display:'none',position:'absolute',bottom:'calc(100% + 6px)',left:'50%',transform:'translateX(-50%)',
+            width:220,background:'var(--ui-bg-5)',border:'1px solid var(--ui-border)',borderRadius:8,
+            padding:'8px 10px',zIndex:50,pointerEvents:'none'}}>
+            <div className="text-[11px] font-semibold ui-text-2 mb-1">{t('genMode_template')}</div>
+            <div className="text-[11px] ui-text-3 mb-2" style={{lineHeight:1.5}}>{t('genModeTemplateDesc')}</div>
+            <div className="text-[11px] font-semibold ui-text-2 mb-1">Solo</div>
+            <div className="text-[11px] ui-text-3" style={{lineHeight:1.5}}>{t('genModeSoloDesc')}</div>
+          </div>
+        </div>
       </div>
 
       {/* Quick prompts */}
