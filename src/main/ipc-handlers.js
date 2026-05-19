@@ -616,49 +616,53 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
 
   const W = 1920, H = 1080;
 
-  // Single offscreen window reused for all slides
+  // Single offscreen window, single page load for all slides
   const offscreen = new BrowserWindow({
     width: W, height: H,
     x: -W - 100, y: 0,
     frame: false, skipTaskbar: true,
-    webPreferences: { contextIsolation: true },
+    webPreferences: { contextIsolation: true, deviceScaleFactor: 1 },
   });
   offscreen.showInactive();
 
   try {
+    // Build one HTML containing every slide; show only one at a time
+    const html = buildAllSlidesHTML(slides, W, H);
+    const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+
+    // Wait for page load + diagram init signal
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const onConsole = (_e, _level, message) => {
+        if (message === '__ready__' && !settled) { settled = true; cleanup(); resolve(); }
+      };
+      const onLoad = () => {
+        if (!settled) setTimeout(() => { if (!settled) { settled = true; cleanup(); resolve(); } }, 300);
+      };
+      const onFail = (_, code, desc) => { cleanup(); reject(new Error(desc || 'load failed')); };
+      function cleanup() {
+        offscreen.webContents.removeListener('console-message', onConsole);
+        offscreen.webContents.removeListener('did-finish-load', onLoad);
+        offscreen.webContents.removeListener('did-fail-load', onFail);
+      }
+      offscreen.webContents.on('console-message', onConsole);
+      offscreen.webContents.once('did-finish-load', onLoad);
+      offscreen.webContents.once('did-fail-load', onFail);
+      offscreen.loadURL(dataUrl);
+    });
+
+    // Capture each slide by showing it and screenshotting
     const jpegs = [];
-
     for (let i = 0; i < slides.length; i++) {
-      const slide = slides[i];
-      const html = buildSingleSlideHTML(slide, W, H);
-      // Use data: URL to avoid temp-file I/O
-      const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-
-      await new Promise((resolve, reject) => {
-        const onFail = (_, code, desc) => { cleanup(); reject(new Error(desc || 'load failed')); };
-        let settled = false;
-
-        // Resolve as soon as the page signals it's ready (diagram JS emits console.log('__ready__'))
-        const onConsole = (_e, level, message) => {
-          if (message === '__ready__' && !settled) { settled = true; cleanup(); resolve(); }
-        };
-        // Fallback: resolve 200ms after load finishes (for slides with no diagrams)
-        const onLoad = () => {
-          if (!settled) setTimeout(() => { if (!settled) { settled = true; cleanup(); resolve(); } }, 200);
-        };
-
-        function cleanup() {
-          offscreen.webContents.removeListener('console-message', onConsole);
-          offscreen.webContents.removeListener('did-finish-load', onLoad);
-          offscreen.webContents.removeListener('did-fail-load', onFail);
-        }
-
-        offscreen.webContents.on('console-message', onConsole);
-        offscreen.webContents.once('did-finish-load', onLoad);
-        offscreen.webContents.once('did-fail-load', onFail);
-        offscreen.loadURL(dataUrl);
-      });
-
+      await offscreen.webContents.executeJavaScript(`
+        document.querySelectorAll('.slide-page').forEach(function(el, j) {
+          el.style.display = j === ${i} ? 'flex' : 'none';
+        });
+      `);
+      // One rAF tick to ensure repaint
+      await offscreen.webContents.executeJavaScript(
+        'new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); })'
+      );
       const image = await offscreen.webContents.capturePage({ x: 0, y: 0, width: W, height: H });
       jpegs.push(image.toJPEG(92));
     }
@@ -696,9 +700,59 @@ ${_diagramRendererJS ? `<script>${_diagramRendererJS}\n${DIAGRAM_INIT_JS}</scrip
 </html>`;
 }
 
+// Single HTML with all slides — used by PDF export to avoid reloading per slide
+function buildAllSlidesHTML(slides, w, h) {
+  const pages = slides.map((s, i) => {
+    const bg = s.background || '#1e1e2e';
+    const color = s.color || '#cdd6f4';
+    const layout = s.layout || 'content';
+    const inner = renderElements(s.elements, layout, s.sectionNum);
+    const tv = themeVarsStyle(s.themeVars);
+    const style = `background:${bg};color:${color}${tv ? ';' + tv : ''}`;
+    return `<div class="slide-page" style="display:${i === 0 ? 'flex' : 'none'};position:absolute;inset:0;">`
+      + `<div class="slide-container layout-${layout}" style="${style}">${inner}</div>`
+      + `</div>`;
+  }).join('\n');
+
+  // DIAGRAM_INIT_JS already ends with console.log('__ready__')
+  const diagScript = _diagramRendererJS
+    ? `<script>${_diagramRendererJS}\n${DIAGRAM_INIT_JS}</script>`
+    : `<script>console.log('__ready__');</script>`;
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"/>
+<style>
+${SLIDE_CSS}
+html,body{margin:0;padding:0;width:${w}px;height:${h}px;overflow:hidden;background:#000;}
+</style></head>
+<body>
+${pages}
+${_chartJS ? `<script>${_chartJS}</script>` : ''}
+${diagScript}
+</body>
+</html>`;
+}
+
+// Read actual pixel dimensions from a JPEG buffer (SOF marker)
+function jpegDimensions(buf) {
+  let i = 2;
+  while (i < buf.length) {
+    if (buf[i] !== 0xff) break;
+    const marker = buf[i + 1];
+    const segLen = buf.readUInt16BE(i + 2);
+    // SOF markers: 0xC0–0xC3, 0xC5–0xC7, 0xC9–0xCB, 0xCD–0xCF
+    if ((marker >= 0xc0 && marker <= 0xc3) || (marker >= 0xc5 && marker <= 0xc7) ||
+        (marker >= 0xc9 && marker <= 0xcb) || (marker >= 0xcd && marker <= 0xcf)) {
+      return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
+    }
+    i += 2 + segLen;
+  }
+  return null;
+}
+
 // Minimal pure-JS PDF builder — embeds each JPEG as a full-page image
 function buildPDFFromJPEGs(jpegs, w, h) {
-  // PDF page size in points at 96 dpi: px * 72 / 96
+  // PDF page size in points — use 16:9 at 72 dpi (presentation standard)
   const pw = Math.round(w * 72 / 96);  // 1440
   const ph = Math.round(h * 72 / 96);  // 810
 
@@ -723,10 +777,15 @@ function buildPDFFromJPEGs(jpegs, w, h) {
     imageObjNums.push(imgNum);
     pageObjNums.push(pageNum);
 
+    // Read actual pixel dimensions from JPEG — capturePage on HiDPI returns 2x pixels
+    const imgData = jpegs[i];
+    const dims = jpegDimensions(imgData);
+    const iw = dims ? dims.w : w;
+    const ih = dims ? dims.h : h;
+
     // Image object
     offsets[imgNum] = pos();
-    const imgData = jpegs[i];
-    add(`${imgNum} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} `
+    add(`${imgNum} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${iw} /Height ${ih} `
       + `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imgData.length} >>\nstream\n`);
     add(imgData);
     add('\nendstream\nendobj\n');
