@@ -159,33 +159,47 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
       setGenStep(1);
       setThinking(false);
 
-      // Step 2: clear existing slides first
+      // Step 2: generate each slide one by one
       const allSlides = [];
+      let errorCount = 0;
 
-      // Step 3: generate each slide one by one
       for (let i = 0; i < outline.length; i++) {
         setGenStep(i + 1);
+        const s = outline[i];
         const slideResult = await window.openslides.genSlide(
-          { outlineSlide: outline[i], allOutline: outline, userRequest: text, slideIndex: i, totalSlides: outline.length },
+          { outlineSlide: s, allOutline: outline, userRequest: text, slideIndex: i, totalSlides: outline.length },
           settings
         );
-        if (!slideResult.success) {
-          setGenError(`幻灯片 ${i + 1} 生成失败: ${slideResult.error}`);
-          continue;
+        if (!slideResult.success || !slideResult.data?.slides?.length) {
+          errorCount++;
+          setGenError(`幻灯片 ${i + 1} 生成失败`);
+          // Insert minimal fallback slide so deck stays complete
+          allSlides.push({
+            id: s.id || `slide-${i + 1}`,
+            layout: s.layout || 'content',
+            background: i % 2 === 0 ? '#0f0f1a' : '#13131f',
+            transition: i === 0 ? 'fade' : 'slide',
+            elements: [
+              { type: 'kicker', text: s.kicker || 'SLIDE' },
+              { type: 'heading', text: s.title || `Slide ${i + 1}`, gradient: true },
+              { type: 'divider' },
+              { type: 'body', text: slideResult.error || '生成失败，请重试' },
+            ],
+          });
+        } else {
+          allSlides.push(...slideResult.data.slides);
         }
-        const newSlides = slideResult.data?.slides;
-        if (Array.isArray(newSlides) && newSlides.length) {
-          allSlides.push(...newSlides);
-          // Apply progressively so user sees slides appearing one by one
-          onApplyAction({ action: 'replace_all', slides: [...allSlides] });
-        }
+        // Apply progressively so user sees slides appearing one by one
+        onApplyAction({ action: 'replace_all', slides: [...allSlides] });
       }
 
       setGenStep(outline.length + 1);
       setGenDone(true);
       setMessages((prev) => [...prev, {
         role: 'assistant',
-        content: `✓ 全部 ${outline.length} 页幻灯片已生成完成！`,
+        content: errorCount > 0
+          ? `✓ ${outline.length} 页已生成，其中 ${errorCount} 页生成失败（已插入占位页）。`
+          : `✓ 全部 ${outline.length} 页幻灯片已生成完成！`,
       }]);
     } catch (err) {
       setGenError(err.message);

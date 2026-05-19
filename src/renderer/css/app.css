@@ -62,10 +62,9 @@ iframe.slide-viewport {
   border: none;
   border-radius: var(--radius);
   background: #1e1e2e;
-  width: 100%;
-  aspect-ratio: 16/9;
   display: block;
   box-shadow: 0 8px 48px rgba(0,0,0,0.6);
+  flex-shrink: 0;
 }
 
 /* Thinking animation */

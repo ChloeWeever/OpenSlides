@@ -354,12 +354,64 @@ function renderFlow(el) {
   const nodes = el.nodes || [];
   const edges = el.edges || [];
 
-  // BFS to assign column depths
+  const FONT_SIZE = 13;
+  const PAD_X = 18;   // horizontal padding inside box
+  const PAD_Y = 10;   // vertical padding inside box
+  const MAX_LABEL_W = 160; // max box width before wrapping
+  const HGAP = 60;    // gap between columns
+  const VGAP = 20;    // gap between rows
+  const ns = 'http://www.w3.org/2000/svg';
+
+  // Approximate character width for mixed CJK/Latin text
+  const charW = (ch) => ch.charCodeAt(0) > 0x2E7F ? FONT_SIZE * 1.0 : FONT_SIZE * 0.6;
+  const measureText = (str) => [...str].reduce((w, ch) => w + charW(ch), 0);
+
+  // Split label into lines that fit within MAX_LABEL_W - PAD_X*2
+  const innerW = MAX_LABEL_W - PAD_X * 2;
+  const splitLines = (label) => {
+    const words = label.split(/\s+/);
+    const lines = [];
+    let cur = '';
+    for (const w of words) {
+      const candidate = cur ? cur + ' ' + w : w;
+      if (measureText(candidate) > innerW && cur) {
+        lines.push(cur);
+        cur = w;
+      } else {
+        cur = candidate;
+      }
+    }
+    if (cur) lines.push(cur);
+    // Hard-wrap any single line still too wide (e.g. continuous Chinese)
+    const result = [];
+    for (const line of lines) {
+      if (measureText(line) <= innerW) { result.push(line); continue; }
+      let part = '';
+      for (const ch of line) {
+        if (measureText(part + ch) > innerW) { result.push(part); part = ch; }
+        else part += ch;
+      }
+      if (part) result.push(part);
+    }
+    return result.length ? result : [label];
+  };
+
+  // Pre-compute box sizes
+  const boxInfo = {};
+  nodes.forEach(n => {
+    const label = n.label || n.id;
+    const lines = splitLines(label);
+    const maxLineW = Math.max(...lines.map(l => measureText(l)));
+    const bw = Math.min(MAX_LABEL_W, maxLineW + PAD_X * 2);
+    const bh = lines.length * (FONT_SIZE + 4) + PAD_Y * 2;
+    boxInfo[n.id] = { label, lines, bw, bh };
+  });
+
+  // BFS depth assignment
   const depth = {};
   const adj = {};
   nodes.forEach(n => { depth[n.id] = -1; adj[n.id] = []; });
-  edges.forEach(e => { if (adj[e.from]) adj[e.from].push(e.to); });
-
+  edges.forEach(e => { if (adj[e.from] !== undefined) adj[e.from].push(e.to); });
   const roots = nodes.filter(n => !edges.some(e => e.to === n.id)).map(n => n.id);
   if (!roots.length && nodes.length) roots.push(nodes[0].id);
   const queue = [...roots];
@@ -367,10 +419,7 @@ function renderFlow(el) {
   while (queue.length) {
     const id = queue.shift();
     (adj[id] || []).forEach(nid => {
-      if (depth[nid] < depth[id] + 1) {
-        depth[nid] = depth[id] + 1;
-        queue.push(nid);
-      }
+      if (depth[nid] < depth[id] + 1) { depth[nid] = depth[id] + 1; queue.push(nid); }
     });
   }
   nodes.forEach(n => { if (depth[n.id] < 0) depth[n.id] = 0; });
@@ -382,29 +431,44 @@ function renderFlow(el) {
     if (!cols[d]) cols[d] = [];
     cols[d].push(n.id);
   });
-  const numCols = Object.keys(cols).length;
+  const colKeys = Object.keys(cols).map(Number).sort((a, b) => a - b);
 
-  const NW = 150, NH = 48, HGAP = 100, VGAP = 28;
-  const maxPerCol = Math.max(...Object.values(cols).map(a => a.length));
-  const svgW = numCols * NW + (numCols - 1) * HGAP + 40;
-  const svgH = maxPerCol * NH + (maxPerCol - 1) * VGAP + 40;
+  // Column widths = widest box in that column
+  const colW = {};
+  colKeys.forEach(d => {
+    colW[d] = Math.max(...cols[d].map(id => boxInfo[id].bw));
+  });
 
+  // Column x offsets
+  const colX = {};
+  let cx = 20;
+  colKeys.forEach(d => { colX[d] = cx; cx += colW[d] + HGAP; });
+
+  // SVG dimensions
+  const svgW = cx - HGAP + 20;
+  const maxColH = Math.max(...colKeys.map(d => {
+    const ids = cols[d];
+    return ids.reduce((h, id) => h + boxInfo[id].bh, 0) + (ids.length - 1) * VGAP;
+  }));
+  const svgH = maxColH + 40;
+
+  // Node positions (centered in column, vertically centered)
   const pos = {};
-  Object.entries(cols).forEach(([d, ids]) => {
-    const colH = ids.length * NH + (ids.length - 1) * VGAP;
-    const startY = (svgH - colH) / 2;
-    ids.forEach((id, i) => {
-      pos[id] = {
-        x: 20 + Number(d) * (NW + HGAP),
-        y: startY + i * (NH + VGAP),
-      };
+  colKeys.forEach(d => {
+    const ids = cols[d];
+    const totalH = ids.reduce((h, id) => h + boxInfo[id].bh, 0) + (ids.length - 1) * VGAP;
+    let y = (svgH - totalH) / 2;
+    ids.forEach(id => {
+      const info = boxInfo[id];
+      // Center box horizontally within the column width
+      pos[id] = { x: colX[d] + (colW[d] - info.bw) / 2, y };
+      y += info.bh + VGAP;
     });
   });
 
-  const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
   svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
-  svg.style.cssText = `width:100%;max-height:52vh;`;
+  svg.style.cssText = 'width:100%;max-height:52vh;';
 
   // Arrow marker
   const defs = document.createElementNS(ns, 'defs');
@@ -423,36 +487,38 @@ function renderFlow(el) {
   defs.appendChild(marker);
   svg.appendChild(defs);
 
-  // Edges
+  // Edges — connect right-center of from-box to left-center of to-box
   edges.forEach(e => {
-    const from = pos[e.from], to = pos[e.to];
-    if (!from || !to) return;
-    const line = document.createElementNS(ns, 'line');
-    line.setAttribute('x1', from.x + NW);
-    line.setAttribute('y1', from.y + NH / 2);
-    line.setAttribute('x2', to.x - 2);
-    line.setAttribute('y2', to.y + NH / 2);
-    line.setAttribute('stroke', '#89b4fa');
-    line.setAttribute('stroke-width', '1.5');
-    line.setAttribute('stroke-opacity', '0.6');
-    line.setAttribute('marker-end', 'url(#arrow)');
-    svg.appendChild(line);
+    const fp = pos[e.from], tp = pos[e.to];
+    const fi = boxInfo[e.from], ti = boxInfo[e.to];
+    if (!fp || !tp || !fi || !ti) return;
+    const x1 = fp.x + fi.bw;
+    const y1 = fp.y + fi.bh / 2;
+    const x2 = tp.x - 2;
+    const y2 = tp.y + ti.bh / 2;
+    const mx = (x1 + x2) / 2;
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', '#89b4fa');
+    path.setAttribute('stroke-width', '1.5');
+    path.setAttribute('stroke-opacity', '0.6');
+    path.setAttribute('marker-end', 'url(#arrow)');
+    svg.appendChild(path);
   });
-
-  // Node label helper
-  const nodeLabel = (n) => n.label || n.id;
 
   // Nodes
   nodes.forEach(n => {
     const p = pos[n.id];
-    if (!p) return;
+    const info = boxInfo[n.id];
+    if (!p || !info) return;
     const g = document.createElementNS(ns, 'g');
 
     const rect = document.createElementNS(ns, 'rect');
     rect.setAttribute('x', p.x);
     rect.setAttribute('y', p.y);
-    rect.setAttribute('width', NW);
-    rect.setAttribute('height', NH);
+    rect.setAttribute('width', info.bw);
+    rect.setAttribute('height', info.bh);
     rect.setAttribute('rx', '8');
     rect.setAttribute('ry', '8');
     rect.setAttribute('fill', 'rgba(137,180,250,.12)');
@@ -460,16 +526,22 @@ function renderFlow(el) {
     rect.setAttribute('stroke-width', '1.5');
     g.appendChild(rect);
 
-    const text = document.createElementNS(ns, 'text');
-    text.setAttribute('x', p.x + NW / 2);
-    text.setAttribute('y', p.y + NH / 2 + 1);
-    text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('dominant-baseline', 'middle');
-    text.setAttribute('fill', '#cdd6f4');
-    text.setAttribute('font-size', '13');
-    text.setAttribute('font-family', 'Inter,system-ui,sans-serif');
-    text.textContent = nodeLabel(n);
-    g.appendChild(text);
+    // Multi-line text
+    const lineH = FONT_SIZE + 4;
+    const totalTextH = info.lines.length * lineH;
+    const startY = p.y + (info.bh - totalTextH) / 2 + FONT_SIZE;
+    info.lines.forEach((line, li) => {
+      const txt = document.createElementNS(ns, 'text');
+      txt.setAttribute('x', p.x + info.bw / 2);
+      txt.setAttribute('y', startY + li * lineH);
+      txt.setAttribute('text-anchor', 'middle');
+      txt.setAttribute('dominant-baseline', 'auto');
+      txt.setAttribute('fill', '#cdd6f4');
+      txt.setAttribute('font-size', String(FONT_SIZE));
+      txt.setAttribute('font-family', 'Inter,"Noto Sans SC",system-ui,sans-serif');
+      txt.textContent = line;
+      g.appendChild(txt);
+    });
 
     svg.appendChild(g);
   });
@@ -482,20 +554,40 @@ function renderMindmap(el) {
   const children = el.children || [];
 
   const ns = 'http://www.w3.org/2000/svg';
-  const W = 700, H = 500, CX = W / 2, CY = H / 2;
 
-  const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  svg.style.cssText = 'width:100%;max-height:52vh;';
+  // Shared text helpers (same as renderFlow)
+  const FSROOT = 14, FSCHILD = 12, FSGC = 11;
+  const charW = (ch, fs) => ch.charCodeAt(0) > 0x2E7F ? fs * 1.0 : fs * 0.6;
+  const measureText = (str, fs) => [...str].reduce((w, ch) => w + charW(ch, fs), 0);
+  const MAX_LINE_W = 110;
+  const splitLines = (label, fs) => {
+    const limit = MAX_LINE_W;
+    const result = [];
+    let part = '';
+    for (const ch of label) {
+      if (measureText(part + ch, fs) > limit) { result.push(part); part = ch; }
+      else part += ch;
+    }
+    if (part) result.push(part);
+    return result.length ? result : [label];
+  };
 
-  function addNode(x, y, label, isRoot, colorIdx) {
+  function makeNode(x, y, label, isRoot, colorIdx) {
     const color = CHART_PALETTE[colorIdx % CHART_PALETTE.length];
-    const g = document.createElementNS(ns, 'g');
-    const pad = isRoot ? 18 : 12;
-    const charW = isRoot ? 9 : 8;
-    const bw = Math.max(label.length * charW + pad * 2, isRoot ? 90 : 70);
-    const bh = isRoot ? 40 : 32;
+    const fs = isRoot ? FSROOT : FSCHILD;
+    const PAD_X = isRoot ? 16 : 12;
+    const PAD_Y = isRoot ? 10 : 7;
+    const lines = splitLines(label, fs);
+    const maxLW = Math.max(...lines.map(l => measureText(l, fs)));
+    const bw = maxLW + PAD_X * 2;
+    const lineH = fs + 3;
+    const bh = lines.length * lineH + PAD_Y * 2;
+    return { x, y, bw, bh, lines, lineH, fs, PAD_Y, isRoot, color };
+  }
 
+  function drawNode(info) {
+    const { x, y, bw, bh, lines, lineH, fs, PAD_Y, isRoot, color } = info;
+    const g = document.createElementNS(ns, 'g');
     const rect = document.createElementNS(ns, 'rect');
     rect.setAttribute('x', x - bw / 2);
     rect.setAttribute('y', y - bh / 2);
@@ -506,20 +598,22 @@ function renderMindmap(el) {
     rect.setAttribute('stroke', isRoot ? '#89b4fa' : color);
     rect.setAttribute('stroke-width', isRoot ? '2' : '1.5');
     g.appendChild(rect);
-
-    const text = document.createElementNS(ns, 'text');
-    text.setAttribute('x', x);
-    text.setAttribute('y', y + 1);
-    text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('dominant-baseline', 'middle');
-    text.setAttribute('fill', '#cdd6f4');
-    text.setAttribute('font-size', isRoot ? '14' : '12');
-    text.setAttribute('font-weight', isRoot ? '700' : '500');
-    text.setAttribute('font-family', 'Inter,system-ui,sans-serif');
-    text.textContent = label;
-    g.appendChild(text);
-
-    return { g, x, y, color };
+    const totalTextH = lines.length * lineH;
+    const startY = y - totalTextH / 2 + fs;
+    lines.forEach((line, li) => {
+      const txt = document.createElementNS(ns, 'text');
+      txt.setAttribute('x', x);
+      txt.setAttribute('y', startY + li * lineH);
+      txt.setAttribute('text-anchor', 'middle');
+      txt.setAttribute('dominant-baseline', 'auto');
+      txt.setAttribute('fill', '#cdd6f4');
+      txt.setAttribute('font-size', fs);
+      txt.setAttribute('font-weight', isRoot ? '700' : '500');
+      txt.setAttribute('font-family', 'Inter,"Noto Sans SC",system-ui,sans-serif');
+      txt.textContent = line;
+      g.appendChild(txt);
+    });
+    return g;
   }
 
   function addEdge(x1, y1, x2, y2, color) {
@@ -530,42 +624,48 @@ function renderMindmap(el) {
     path.setAttribute('stroke', color);
     path.setAttribute('stroke-width', '1.5');
     path.setAttribute('stroke-opacity', '0.5');
-    svg.appendChild(path);
+    return path;
   }
 
-  // Calculate total leaf count for even vertical distribution
   function countLeaves(node) {
     if (!node.children || !node.children.length) return 1;
     return node.children.reduce((s, c) => s + countLeaves(c), 0);
   }
 
-  const totalLeaves = children.reduce((s, c) => s + countLeaves(c), 0) || 1;
-  const { g: rootNode } = addNode(CX, CY, root, true, 0);
-  svg.appendChild(rootNode);
+  // Layout on a virtual 700×500 canvas; SVG viewBox will match
+  const W = 720, H = 520, CX = W / 2, CY = H / 2;
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.style.cssText = 'width:100%;max-height:52vh;';
 
+  const rootInfo = makeNode(CX, CY, root, true, 0);
+  svg.appendChild(drawNode(rootInfo));
+
+  const totalLeaves = children.reduce((s, c) => s + countLeaves(c), 0) || 1;
   let leafCursor = 0;
+
   children.forEach((child, ci) => {
     const leaves = countLeaves(child);
     const midLeaf = leafCursor + leaves / 2;
-    const angle = ((midLeaf / totalLeaves) * 2 * Math.PI) - Math.PI / 2;
-    const r1 = 160;
+    const angle = (midLeaf / totalLeaves) * 2 * Math.PI - Math.PI / 2;
+    const r1 = 170;
     const cx = CX + r1 * Math.cos(angle);
     const cy = CY + r1 * Math.sin(angle);
+    const childInfo = makeNode(cx, cy, child.label || '', false, ci);
+    const color = childInfo.color;
 
-    addEdge(CX, CY, cx, cy, CHART_PALETTE[ci % CHART_PALETTE.length]);
-    const { g: childNode, color } = addNode(cx, cy, child.label || '', false, ci);
-    svg.appendChild(childNode);
+    svg.appendChild(addEdge(CX, CY, cx, cy, color));
+    svg.appendChild(drawNode(childInfo));
 
-    // Grandchildren
     const subChildren = child.children || [];
     subChildren.forEach((gc, gci) => {
-      const subAngle = angle + ((gci - (subChildren.length - 1) / 2) * 0.35);
-      const r2 = 120;
+      const subAngle = angle + (gci - (subChildren.length - 1) / 2) * 0.38;
+      const r2 = 130;
       const gcx = cx + r2 * Math.cos(subAngle);
       const gcy = cy + r2 * Math.sin(subAngle);
-      addEdge(cx, cy, gcx, gcy, color);
-      const { g: gcNode } = addNode(gcx, gcy, gc.label || '', false, ci);
-      svg.appendChild(gcNode);
+      const gcInfo = makeNode(gcx, gcy, gc.label || '', false, ci);
+      svg.appendChild(addEdge(cx, cy, gcx, gcy, color));
+      svg.appendChild(drawNode(gcInfo));
     });
 
     leafCursor += leaves;
@@ -641,7 +741,26 @@ window.addEventListener('message', (event) => {
   }
 });
 
+let animTimer = null;
+
 function showSlideSimple(slide, direction) {
+  // Cancel any in-flight animation immediately
+  if (animTimer !== null) {
+    clearTimeout(animTimer);
+    animTimer = null;
+    // Reset both containers to a clean state
+    current.classList.remove(
+      'anim-slide-enter-forward','anim-slide-exit-forward',
+      'anim-slide-enter-backward','anim-slide-exit-backward',
+      'anim-fade-enter','anim-fade-exit',
+      'anim-zoom-enter','anim-zoom-exit'
+    );
+    next.innerHTML = '';
+    next.className = 'slide-container hidden';
+    next.style.cssText = '';
+  }
+
+  // No transition: render directly into current
   if (!currentSlide || !slide.transition || slide.transition === 'none') {
     renderSlide(current, slide);
     current.classList.remove('hidden');
@@ -656,20 +775,33 @@ function showSlideSimple(slide, direction) {
     return;
   }
 
+  // Render new slide into `next`, animate both, then promote `next` → `current`
   renderSlide(next, slide);
+  next.classList.remove('hidden');
   next.style.visibility = 'visible';
   next.style.pointerEvents = 'auto';
-  next.classList.remove('hidden');
+
+  // Force reflow so CSS transition starts from the right keyframe
+  void next.offsetWidth;
+
   next.classList.add(anim.enter);
   current.classList.add(anim.exit);
 
-  setTimeout(() => {
-    current.innerHTML = next.innerHTML;
-    current.className = next.className.replace(anim.enter, '').replace('hidden', '').trim();
-    current.style.cssText = next.style.cssText;
+  const DURATION = 470;
+  animTimer = setTimeout(() => {
+    animTimer = null;
+
+    // Swap: render the new slide fresh into `current` (avoids innerHTML/canvas loss)
+    renderSlide(current, slide);
+    current.className = `slide-container layout-${slide.layout || 'content'}`;
+    current.style.background = slide.background || '';
+    current.style.color = slide.color || '';
+
+    // Reset next
     next.innerHTML = '';
     next.className = 'slide-container hidden';
     next.style.cssText = '';
+
     currentSlide = slide;
-  }, 470);
+  }, DURATION);
 }

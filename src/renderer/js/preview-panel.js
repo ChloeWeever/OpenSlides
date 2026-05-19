@@ -398,12 +398,32 @@ function ImageTray({ slide, onApplyAction }) {
 // ── PreviewPanel ──────────────────────────────────────────────────────────────
 function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, onPrev, onGoTo, onReorder, onApplyAction, onSave, onElementSelected, canUndo, canRedo, onUndo, onRedo }) {
   const iframeRef = React.useRef(null);
+  const viewportContainerRef = React.useRef(null);
+  const [viewportSize, setViewportSize] = React.useState({ width: 0, height: 0 });
   const [selectedTransition, setSelectedTransition] = React.useState(currentSlide?.transition || 'slide');
   const [showTransitions, setShowTransitions] = React.useState(false);
   const [fullscreen, setFullscreen] = React.useState(false);
   const [showImagePicker, setShowImagePicker] = React.useState(false);
   const [uploadingImage, setUploadingImage] = React.useState(false);
   const imagePickerRef = React.useRef(null);
+
+  // Fit 16:9 iframe to available container space
+  React.useEffect(() => {
+    const el = viewportContainerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      const pad = 48; // px breathing room on each axis
+      const availW = width - pad;
+      const availH = height - pad;
+      const byWidth = { w: availW, h: availW * 9 / 16 };
+      const byHeight = { w: availH * 16 / 9, h: availH };
+      const fit = byHeight.w <= availW ? byHeight : byWidth;
+      setViewportSize({ width: Math.round(fit.w), height: Math.round(fit.h) });
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   // Close image picker on outside click
   React.useEffect(() => {
@@ -442,14 +462,15 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
   React.useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
-    const send = () => {
-      iframe.contentWindow?.postMessage(
-        { type: 'render', slide: currentSlide, direction: direction.current },
-        '*'
-      );
-    };
-    if (iframe.contentDocument?.readyState === 'complete') send();
-    else iframe.onload = send;
+    const msg = { type: 'render', slide: currentSlide, direction: direction.current };
+    const send = () => iframe.contentWindow?.postMessage(msg, '*');
+    let cancelled = false;
+    if (iframe.contentDocument?.readyState === 'complete') {
+      send();
+    } else {
+      iframe.onload = () => { if (!cancelled) send(); };
+    }
+    return () => { cancelled = true; };
   }, [currentSlide]);
 
   React.useEffect(() => {
@@ -611,16 +632,17 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
       </div>
 
       {/* Slide viewport */}
-      <div className="flex-1 flex items-center justify-center px-6 py-4 overflow-hidden">
-        <div className="w-full max-w-3xl">
-          <iframe
-            ref={iframeRef}
-            className="slide-viewport"
-            src="slide-frame/slide-frame.html"
-            title="Slide Preview"
-            sandbox="allow-scripts allow-same-origin"
-          />
-        </div>
+      <div ref={viewportContainerRef} className="flex-1 flex items-center justify-center overflow-hidden">
+        <iframe
+          ref={iframeRef}
+          className="slide-viewport"
+          src="slide-frame/slide-frame.html"
+          title="Slide Preview"
+          sandbox="allow-scripts allow-same-origin"
+          style={viewportSize.width > 0
+            ? { width: viewportSize.width, height: viewportSize.height }
+            : { width: '100%', aspectRatio: '16/9' }}
+        />
       </div>
 
       {/* Image tray — shown when current slide has images */}
