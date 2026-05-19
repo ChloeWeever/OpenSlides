@@ -40,7 +40,7 @@ function App() {
 
   // Theme & language
   const [theme, setTheme] = React.useState(
-    () => localStorage.getItem('openslides-theme') || 'dark'
+    () => localStorage.getItem('openslides-theme') || 'light'
   );
   const [lang, setLangState] = React.useState(() => window._lang || 'zh');
 
