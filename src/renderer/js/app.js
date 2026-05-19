@@ -42,7 +42,7 @@ function App() {
   const [theme, setTheme] = React.useState(
     () => localStorage.getItem('openslides-theme') || 'light'
   );
-  const [lang, setLangState] = React.useState(() => window._lang || 'zh');
+  const [lang, setLangState] = React.useState(() => window._lang || 'en');
 
   React.useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);

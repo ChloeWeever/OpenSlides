@@ -190,7 +190,7 @@ const STRINGS = {
   },
 };
 
-window._lang = localStorage.getItem('openslides-lang') || 'zh';
+window._lang = localStorage.getItem('openslides-lang') || 'en';
 
 window.t = function(key) {
   var args = Array.prototype.slice.call(arguments, 1);
