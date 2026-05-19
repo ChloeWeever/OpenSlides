@@ -39,7 +39,7 @@ function useSlideManager() {
   const [currentIndex, setCurrentIndex] = React.useState(0);
   const lastDirection = React.useRef('forward');
 
-  const slides = history[pointer];
+  const slides = history[pointer] ?? history[history.length - 1] ?? DEFAULT_SLIDES;
 
   const currentSlide = slides[currentIndex] ?? slides[0];
 
@@ -48,11 +48,10 @@ function useSlideManager() {
     setHistory((prev) => {
       const trimmed = prev.slice(0, pointer + 1);
       const next = [...trimmed, newSlides];
-      return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next;
-    });
-    setPointer((p) => {
-      const next = Math.min(p + 1, MAX_HISTORY - 1);
-      return next;
+      const clamped = next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next;
+      // Update pointer inside the same batch to avoid a transient undefined history[pointer]
+      setTimeout(() => setPointer(clamped.length - 1), 0);
+      return clamped;
     });
   }, [pointer]);
 

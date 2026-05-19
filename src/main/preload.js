@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('openslides', {
   sendChat: (messages, settings) => ipcRenderer.invoke('llm:chat', messages, settings),
+  genOutline: (userRequest, settings) => ipcRenderer.invoke('llm:outline', userRequest, settings),
+  genSlide: (params, settings) => ipcRenderer.invoke('llm:gen-slide', params, settings),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),
   savePresentation: (data) => ipcRenderer.invoke('presentation:save', data),

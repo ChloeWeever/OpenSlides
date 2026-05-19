@@ -23,7 +23,7 @@ function request(url, options, body) {
   });
 }
 
-async function callLLM(messages, settings) {
+async function callLLM(messages, settings, maxTokens = 4096) {
   const { apiProvider, apiKey, baseUrl, modelName } = settings;
   // Strip trailing /v1 so we can always append /v1/... ourselves
   const base = baseUrl.replace(/\/$/, '').replace(/\/v1$/, '');
@@ -33,7 +33,7 @@ async function callLLM(messages, settings) {
     const userMessages = messages.filter((m) => m.role !== 'system');
     const body = {
       model: modelName || 'claude-3-5-sonnet-20241022',
-      max_tokens: 4096,
+      max_tokens: maxTokens,
       messages: userMessages,
       ...(systemMsg ? { system: systemMsg.content } : {}),
     };
@@ -52,7 +52,7 @@ async function callLLM(messages, settings) {
     const body = {
       model: modelName || 'gpt-4o',
       messages,
-      max_tokens: 4096,
+      max_tokens: maxTokens,
     };
     const res = await request(`${base}/v1/chat/completions`, {
       method: 'POST',
@@ -67,11 +67,25 @@ async function callLLM(messages, settings) {
 }
 
 function parseJSONResponse(text) {
-  const match = text.match(/```json\s*([\s\S]*?)```/) || text.match(/(\{[\s\S]*\})/);
-  if (match) {
-    try { return JSON.parse(match[1]); } catch { /* fall through */ }
-  }
-  try { return JSON.parse(text); } catch { return null; }
+  if (!text) return null;
+
+  // Strip markdown fences if present (even unclosed ones)
+  const stripped = text.replace(/^```(?:json)?\s*/m, '').replace(/```\s*$/m, '').trim();
+
+  // Try the stripped text first
+  try { return JSON.parse(stripped); } catch { /* fall through */ }
+
+  // Extract outermost { ... } — first { to last }
+  const tryExtract = (src) => {
+    const first = src.indexOf('{');
+    const last = src.lastIndexOf('}');
+    if (first !== -1 && last > first) {
+      try { return JSON.parse(src.slice(first, last + 1)); } catch { /* fall through */ }
+    }
+    return null;
+  };
+
+  return tryExtract(stripped) || tryExtract(text);
 }
 
 module.exports = { callLLM, parseJSONResponse };

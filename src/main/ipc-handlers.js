@@ -74,6 +74,93 @@ For diagrams: use bar/line/pie for data visualization, flow for process/architec
 When the user asks for a chart, graph, flowchart, architecture diagram, or mind map — use the diagram element.
 Use kind:"svg" only as a last resort when none of the built-in kinds fit.`;
 
+// Outline-only prompt: returns a minimal slide list with id/layout/title/notes
+const OUTLINE_PROMPT = `You are a presentation planning assistant. Given the user's request, output a minimal slide outline as JSON.
+
+Respond ONLY with raw JSON — no markdown, no explanation:
+{"action":"outline","slides":[
+  {"id":"slide-1","layout":"title","title":"Slide Title","kicker":"EYEBROW","contentType":"bullets"}
+]}
+
+Rules:
+- id: "slide-1", "slide-2", … (sequential)
+- layout: title | content | section | two-column | big-quote | blank
+- title: the real heading text for this slide (not a placeholder)
+- kicker: 2-4 ALL-CAPS words (topic label)
+- contentType: bullets | cards | stats | diagram | quote | body | pills
+- Each slide is ONE short JSON object on ONE line — no extra fields, no nesting
+- Do NOT add notes, subheading, contentHint, or any other field
+- Aim for 6-12 slides unless the request clearly needs more or fewer`;
+
+// Per-slide prompt: generates one complete slide given its outline entry
+const SLIDE_GEN_PROMPT = `You are a presentation slide designer. Generate ONE complete slide based on the outline entry provided.
+
+Respond ONLY with valid JSON:
+{"action":"add_slides","slides":[{ ... complete slide object ... }]}
+
+The slide must:
+- Use the id, layout, title, kicker, and contentType from the outline entry
+- Extract relevant content from the USER'S ORIGINAL REQUEST — the outline only gives you the title/topic, you must fill in the actual body content from the request
+- Follow the full element schema: start with kicker (if present), then heading with gradient:true, then divider, then rich body elements
+- Use contentType to choose the main body element: cards→feature list, stats→KPI numbers, diagram→flow/chart, bullets→list items, quote→pull quote, body→prose, pills→tag cloud
+- Be visually rich with actual data, numbers, names, and terminology drawn from the user request
+- Match the design language: dark background, gradient headings, dividers after heading
+- transition: "fade" for slide 1, "slide" for all others
+- Generate ONLY this one slide, nothing else`;
+
+ipcMain.handle('llm:outline', async (_event, userRequest, settings) => {
+  try {
+    const messages = [
+      { role: 'system', content: OUTLINE_PROMPT },
+      { role: 'user', content: userRequest },
+    ];
+    const rawText = await callLLM(messages, settings, 16000);
+    const parsed = parseJSONResponse(rawText);
+    if (!parsed) return { success: false, error: `JSON解析失败，原始响应：${rawText.slice(0, 300)}` };
+    const slides = parsed.slides || parsed;
+    if (!Array.isArray(slides) || !slides.length) {
+      return { success: false, error: `大纲格式错误，原始响应：${rawText.slice(0, 300)}` };
+    }
+    return { success: true, data: { action: 'outline', slides }, raw: rawText };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('llm:gen-slide', async (_event, { outlineSlide, allOutline, userRequest, slideIndex, totalSlides }, settings) => {
+  try {
+    const bg = slideIndex % 2 === 0 ? '#0f0f1a' : '#13131f';
+    const outlineJson = JSON.stringify(outlineSlide, null, 2);
+    const prompt = `User's original request:
+${userRequest}
+
+Full presentation outline (${totalSlides} slides):
+${allOutline.map((s, i) => `  Slide ${i+1}: [${s.layout}] ${s.title}${s.kicker ? ' · ' + s.kicker : ''}`).join('\n')}
+
+Now generate slide ${slideIndex + 1} of ${totalSlides} using this outline entry:
+${outlineJson}
+
+Additional constraints:
+- background: "${bg}"
+- transition: "${slideIndex === 0 ? 'fade' : 'slide'}"
+- Use the outline's title, kicker, subheading, content, and notes exactly — do not substitute or invent different content
+- The notes field contains all the real text and data you should use
+- transition: "${slideIndex === 0 ? 'fade' : 'slide'}"
+
+Generate this slide with full rich content. Use the notes as a guide for what elements to include.`;
+
+    const messages = [
+      { role: 'system', content: SLIDE_GEN_PROMPT },
+      { role: 'user', content: prompt },
+    ];
+    const rawText = await callLLM(messages, settings);
+    const parsed = parseJSONResponse(rawText);
+    return { success: true, data: parsed, raw: rawText };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('llm:chat', async (_event, messages, settings) => {
   try {
     const allMessages = [{ role: 'system', content: SYSTEM_PROMPT }, ...messages];
