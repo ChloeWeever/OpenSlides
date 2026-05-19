@@ -568,18 +568,20 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
     return () => document.removeEventListener('mousedown', handler);
   }, [showThemes]);
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const el = viewportContainerRef.current;
     if (!el) return;
-    const obs = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
+    const calc = ({ width, height }) => {
       const pad = 48;
       const availW = width - pad, availH = height - pad;
       const byWidth = { w: availW, h: availW * 9 / 16 };
       const byHeight = { w: availH * 16 / 9, h: availH };
       const fit = byHeight.w <= availW ? byHeight : byWidth;
-      setViewportSize({ width: Math.round(fit.w), height: Math.round(fit.h) });
-    });
+      return { width: Math.round(fit.w), height: Math.round(fit.h) };
+    };
+    const rect = el.getBoundingClientRect();
+    if (rect.width > 0) setViewportSize(calc(rect));
+    const obs = new ResizeObserver(([entry]) => setViewportSize(calc(entry.contentRect)));
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
