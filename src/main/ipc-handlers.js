@@ -680,10 +680,10 @@ ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
       offscreen.loadURL(dataUrl);
     });
 
-    // printToPDF: each .slide-page is exactly W×H px, @page sets paper to match
+    // printToPDF: pageSize in microns (px ÷ 96 × 25.4 × 1000)
     const pdfBuf = await offscreen.webContents.printToPDF({
       printBackground: true,
-      pageSize: { width: W * 1000 / 96, height: H * 1000 / 96 }, // microns at 96dpi
+      pageSize: { width: Math.round(W / 96 * 25.4 * 1000), height: Math.round(H / 96 * 25.4 * 1000) },
       margins: { marginType: 'none' },
     });
     fs.writeFileSync(filePath, pdfBuf);
@@ -726,7 +726,7 @@ function buildPrintableHTML(slides, w, h) {
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"/>
 <style>
-@page { size: ${w}px ${h}px; margin: 0; }
+@page { size: ${(w / 96 * 25.4).toFixed(4)}mm ${(h / 96 * 25.4).toFixed(4)}mm; margin: 0; }
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; width: ${w}px; background: #000; }
 ${SLIDE_CSS}
