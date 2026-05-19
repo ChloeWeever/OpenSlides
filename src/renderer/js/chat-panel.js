@@ -120,7 +120,15 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
   }, [messages, thinking, genOutline]);
 
   const buildContext = React.useCallback(() => {
-    let ctx = `Current presentation has ${slides.length} slide(s). Current slide: ${JSON.stringify(currentSlide, null, 2)}`;
+    const summarizeSlide = (s) => {
+      if (!s) return s;
+      if (s.soloHtml) {
+        const { soloHtml, ...rest } = s;
+        return { ...rest, soloHtml: `[Solo HTML, ${soloHtml.length} chars]` };
+      }
+      return s;
+    };
+    let ctx = `Current presentation has ${slides.length} slide(s). Current slide: ${JSON.stringify(summarizeSlide(currentSlide), null, 2)}`;
     if (selectedElement) {
       ctx += `\n\nThe user has selected this element on the slide: ${JSON.stringify(selectedElement, null, 2)}`;
     }
