@@ -126,9 +126,21 @@ function buildChatModel(settings, tools, maxTokens = 8192) {
   return model.bindTools(tools);
 }
 
+// ── Logger ────────────────────────────────────────────────────────────────────
+
+const log = {
+  info:  (...a) => console.log ('[agent]', ...a),
+  warn:  (...a) => console.warn ('[agent]', ...a),
+  error: (...a) => console.error('[agent]', ...a),
+};
+
 // ── Agent runners ─────────────────────────────────────────────────────────────
 
 async function genSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides }, settings) {
+  const label = `slide ${slideIndex + 1}/${totalSlides} [${outlineSlide.layout || 'content'}] "${outlineSlide.title}"`;
+  log.info(`▶ genSlide ${label} — model: ${settings.modelName || 'gpt-4o'}`);
+  const t0 = Date.now();
+
   const bg = slideIndex % 2 === 0 ? '#0f0f1a' : '#13131f';
   const transition = slideIndex === 0 ? 'fade' : 'slide';
   const userPrompt = `User's original request:
@@ -147,23 +159,55 @@ Call the generate_slide tool with the complete slide object.`;
   const llm = buildChatModel(settings, [generateSlideTool], 4096);
   const agent = createReactAgent({ llm, tools: [generateSlideTool] });
 
-  const result = await agent.invoke({
-    messages: [
-      { role: 'system', content: SLIDE_GEN_SYSTEM },
-      { role: 'user', content: userPrompt },
-    ],
+  let result;
+  try {
+    result = await agent.invoke({
+      messages: [
+        { role: 'system', content: SLIDE_GEN_SYSTEM },
+        { role: 'user', content: userPrompt },
+      ],
+    });
+  } catch (err) {
+    log.error(`✗ genSlide ${label} — invoke failed (${Date.now() - t0}ms):`, err.message);
+    throw err;
+  }
+
+  // Log all messages for debugging
+  result.messages.forEach((m, i) => {
+    const role = m._getType ? m._getType() : (m.role || m.constructor?.name || 'msg');
+    const preview = typeof m.content === 'string'
+      ? m.content.slice(0, 120).replace(/\n/g, '↵')
+      : JSON.stringify(m.content).slice(0, 120);
+    log.info(`  [${i}] ${role}: ${preview}`);
+    if (m.tool_calls?.length) {
+      m.tool_calls.forEach(tc => log.info(`       → tool_call: ${tc.name}`, JSON.stringify(tc.args).slice(0, 200)));
+    }
   });
 
-  // Find the ToolMessage with name 'generate_slide'
   const toolMsg = result.messages.slice().reverse().find(m => m.name === 'generate_slide');
-  if (!toolMsg) throw new Error(`Slide ${slideIndex + 1}: agent did not call generate_slide tool`);
+  if (!toolMsg) {
+    log.error(`✗ genSlide ${label} — no generate_slide tool message found`);
+    throw new Error(`Slide ${slideIndex + 1}: agent did not call generate_slide tool`);
+  }
 
   const raw = typeof toolMsg.content === 'string' ? toolMsg.content : JSON.stringify(toolMsg.content);
-  const slide = JSON.parse(raw);
+  let slide;
+  try {
+    slide = JSON.parse(raw);
+  } catch (err) {
+    log.error(`✗ genSlide ${label} — JSON.parse failed:`, raw.slice(0, 300));
+    throw new Error(`Slide ${slideIndex + 1}: failed to parse tool result as JSON`);
+  }
+
+  log.info(`✓ genSlide ${label} — ${slide.elements?.length ?? 0} elements (${Date.now() - t0}ms)`);
   return { success: true, data: { action: 'add_slides', slides: [slide] } };
 }
 
 async function genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides }, settings) {
+  const label = `solo slide ${slideIndex + 1}/${totalSlides} "${outlineSlide.title}"`;
+  log.info(`▶ genSoloSlide ${label} — model: ${settings.modelName || 'gpt-4o'}`);
+  const t0 = Date.now();
+
   const userPrompt = `Slide title: ${outlineSlide.title || ''}
 Content brief: ${outlineSlide.notes || outlineSlide.title || ''}
 Overall topic: ${userRequest}
@@ -174,18 +218,43 @@ Call the generate_solo_html tool with the complete HTML document.`;
   const llm = buildChatModel(settings, [generateSoloHtmlTool], 8192);
   const agent = createReactAgent({ llm, tools: [generateSoloHtmlTool] });
 
-  const result = await agent.invoke({
-    messages: [
-      { role: 'system', content: SOLO_SLIDE_SYSTEM },
-      { role: 'user', content: userPrompt },
-    ],
+  let result;
+  try {
+    result = await agent.invoke({
+      messages: [
+        { role: 'system', content: SOLO_SLIDE_SYSTEM },
+        { role: 'user', content: userPrompt },
+      ],
+    });
+  } catch (err) {
+    log.error(`✗ genSoloSlide ${label} — invoke failed (${Date.now() - t0}ms):`, err.message);
+    throw err;
+  }
+
+  result.messages.forEach((m, i) => {
+    const role = m._getType ? m._getType() : (m.role || m.constructor?.name || 'msg');
+    const preview = typeof m.content === 'string'
+      ? m.content.slice(0, 80).replace(/\n/g, '↵')
+      : JSON.stringify(m.content).slice(0, 80);
+    log.info(`  [${i}] ${role}: ${preview}`);
+    if (m.tool_calls?.length) {
+      m.tool_calls.forEach(tc => log.info(`       → tool_call: ${tc.name}, html length: ${tc.args?.html?.length ?? 'n/a'}`));
+    }
   });
 
   const toolMsg = result.messages.slice().reverse().find(m => m.name === 'generate_solo_html');
-  if (!toolMsg) throw new Error(`Solo slide ${slideIndex + 1}: agent did not call generate_solo_html tool`);
+  if (!toolMsg) {
+    log.error(`✗ genSoloSlide ${label} — no generate_solo_html tool message found`);
+    throw new Error(`Solo slide ${slideIndex + 1}: agent did not call generate_solo_html tool`);
+  }
 
   const html = typeof toolMsg.content === 'string' ? toolMsg.content : String(toolMsg.content);
-  if (!html || !html.includes('<')) throw new Error(`Solo slide ${slideIndex + 1}: empty HTML returned`);
+  if (!html || !html.includes('<')) {
+    log.error(`✗ genSoloSlide ${label} — empty or invalid HTML (${html?.length ?? 0} chars)`);
+    throw new Error(`Solo slide ${slideIndex + 1}: empty HTML returned`);
+  }
+
+  log.info(`✓ genSoloSlide ${label} — ${html.length} chars (${Date.now() - t0}ms)`);
   return { success: true, data: { action: 'solo_slide', html } };
 }
 
