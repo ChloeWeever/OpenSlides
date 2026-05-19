@@ -1,22 +1,14 @@
 // chat-panel.js — right pane: AI conversation interface
 
-const QUICK_PROMPTS = [
-  'Create a 5-slide intro presentation',
-  'Add a summary slide',
-  'Make the design more colorful',
-  'Add a two-column comparison slide',
-  'Suggest improvements',
-];
-
 // Keywords that signal a "generate full presentation" intent
 function isPresentationRequest(text) {
-  const t = text.toLowerCase();
+  const lower = text.toLowerCase();
   return (
-    (t.includes('ppt') || t.includes('presentation') || t.includes('幻灯片') ||
-     t.includes('slides') || t.includes('slideshow') || t.includes('slide deck') ||
-     t.includes('生成') || t.includes('创建') || t.includes('制作')) &&
-    (t.includes('ppt') || t.includes('presentation') || t.includes('幻灯片') ||
-     t.includes('slides') || t.length > 120)
+    (lower.includes('ppt') || lower.includes('presentation') || lower.includes('幻灯片') ||
+     lower.includes('slides') || lower.includes('slideshow') || lower.includes('slide deck') ||
+     lower.includes('生成') || lower.includes('创建') || lower.includes('制作')) &&
+    (lower.includes('ppt') || lower.includes('presentation') || lower.includes('幻灯片') ||
+     lower.includes('slides') || lower.length > 120)
   );
 }
 
@@ -41,15 +33,15 @@ function Message({ msg }) {
   );
 }
 
-// ── Step-by-step generation progress UI ───────────────────────────────────────
 function GenerationProgress({ outline, currentStep, done, error }) {
   if (!outline) return null;
   return (
-    <div className="mx-4 mb-3 rounded-xl bg-[#1a1a2a] border border-[#2a2a3a] overflow-hidden">
-      <div className="px-3 py-2 border-b border-[#2a2a3a] flex items-center gap-2">
-        <div className={`w-2 h-2 rounded-full ${done ? 'bg-[#a6e3a1]' : 'bg-[#6366f1] animate-pulse'}`} />
-        <span className="text-xs font-medium text-[#cdd6f4]">
-          {done ? '生成完成' : `正在生成幻灯片 ${currentStep} / ${outline.length}`}
+    <div className="mx-4 mb-3 rounded-xl overflow-hidden" style={{background:'var(--ui-bg-4)',border:'1px solid var(--ui-border)'}}>
+      <div className="px-3 py-2 flex items-center gap-2" style={{borderBottom:'1px solid var(--ui-border)'}}>
+        <div className={`w-2 h-2 rounded-full ${done ? 'bg-[#a6e3a1]' : 'animate-pulse'}`}
+          style={!done ? {background:'var(--ui-primary)'} : {}} />
+        <span className="text-xs font-medium ui-text-2">
+          {done ? t('genComplete') : t('genSlide', currentStep, outline.length)}
         </span>
         {error && <span className="text-xs text-[#f38ba8] ml-auto truncate">{error}</span>}
       </div>
@@ -57,23 +49,25 @@ function GenerationProgress({ outline, currentStep, done, error }) {
         {outline.map((s, i) => {
           const state = i < currentStep - 1 ? 'done' : i === currentStep - 1 ? 'active' : 'pending';
           return (
-            <div key={s.id} className={`flex flex-col px-2 py-1.5 rounded-lg text-xs transition-colors ${state === 'active' ? 'bg-[#6366f1]/15' : ''}`}>
+            <div key={s.id} className={`flex flex-col px-2 py-1.5 rounded-lg text-xs transition-colors`}
+              style={state === 'active' ? {background:'rgba(208,64,0,0.12)'} : {}}>
               <div className="flex items-center gap-2">
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${
-                  state === 'done' ? 'bg-[#a6e3a1] text-black' :
-                  state === 'active' ? 'bg-[#6366f1] text-white' :
-                  'bg-[#2a2a3a] text-[#4a4a6a]'
-                }`}>
+                <span className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
+                  style={
+                    state === 'done'   ? {background:'#a6e3a1',color:'#000'} :
+                    state === 'active' ? {background:'var(--ui-primary)',color:'#fff'} :
+                                         {background:'var(--ui-bg-5)',color:'var(--ui-text-4)'}
+                  }>
                   {state === 'done' ? '✓' : i + 1}
                 </span>
-                <span className={`truncate flex-1 font-medium ${state === 'pending' ? 'text-[#4a4a6a]' : 'text-[#cdd6f4]'}`}>
+                <span className={`truncate flex-1 font-medium ${state === 'pending' ? 'ui-text-4' : 'ui-text-2'}`}>
                   {s.title}
                 </span>
-                <span className="text-[#4a4a6a] flex-shrink-0 text-[9px]">[{s.layout}]</span>
+                <span className="flex-shrink-0 text-[9px] ui-text-4">[{s.layout}]</span>
               </div>
               {state !== 'pending' && (s.kicker || s.contentType) && (
-                <div className="ml-6 mt-0.5 text-[#6c7086] text-[10px] leading-snug">
-                  {s.kicker && <span className="text-[#89b4fa] mr-1">{s.kicker}</span>}
+                <div className="ml-6 mt-0.5 text-[10px] leading-snug ui-text-3">
+                  {s.kicker && <span className="mr-1" style={{color:'var(--ui-primary)'}}>{s.kicker}</span>}
                   {s.contentType && <span className="opacity-60">[{s.contentType}]</span>}
                 </div>
               )}
@@ -82,17 +76,20 @@ function GenerationProgress({ outline, currentStep, done, error }) {
         })}
       </div>
       {/* Progress bar */}
-      <div className="h-1 bg-[#2a2a3a]">
+      <div className="h-1" style={{background:'var(--ui-border)'}}>
         <div
-          className="h-full bg-[#6366f1] transition-all duration-500"
-          style={{ width: `${done ? 100 : Math.round(((currentStep - 1) / outline.length) * 100)}%` }}
+          className="h-full transition-all duration-500"
+          style={{
+            background: 'var(--ui-primary)',
+            width: `${done ? 100 : Math.round(((currentStep - 1) / outline.length) * 100)}%`,
+          }}
         />
       </div>
     </div>
   );
 }
 
-function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElement, onClearSelection, messages, setMessages, onNewSession }) {
+function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElement, onClearSelection, messages, setMessages, onNewSession, lang }) {
   const [input, setInput] = React.useState('');
   const [thinking, setThinking] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -102,6 +99,11 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
   const [genError, setGenError] = React.useState('');
   const endRef = React.useRef(null);
   const textareaRef = React.useRef(null);
+
+  const quickPrompts = [
+    t('quickPrompt1'), t('quickPrompt2'), t('quickPrompt3'),
+    t('quickPrompt4'), t('quickPrompt5'),
+  ];
 
   React.useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -118,14 +120,13 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
   const actionToMessage = (data) => {
     switch (data.action) {
       case 'replace_all': return `Created ${data.slides?.length || 0} slides.`;
-      case 'add_slides': return `Added ${data.slides?.length || 0} slide(s).`;
+      case 'add_slides':  return `Added ${data.slides?.length || 0} slide(s).`;
       case 'update_slide': return 'Slide updated.';
       case 'delete_slide': return 'Slide deleted.';
       default: return 'Done!';
     }
   };
 
-  // ── Step-by-step presentation generation ──────────────────────────────────
   const generatePresentation = React.useCallback(async (text) => {
     setThinking(true);
     setGenOutline(null);
@@ -138,19 +139,17 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
     setInput('');
 
     try {
-      // Step 1: generate outline
-      setMessages((prev) => [...prev, { role: 'assistant', content: '正在规划大纲…' }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: t('genStarting') }]);
       const outlineResult = await window.openslides.genOutline(text, settings);
       if (!outlineResult.success) throw new Error(outlineResult.error);
       const outline = outlineResult.data?.slides;
-      if (!Array.isArray(outline) || !outline.length) throw new Error('无法生成大纲');
+      if (!Array.isArray(outline) || !outline.length) throw new Error(t('genFailed'));
 
-      // Update message to show outline summary
       setMessages((prev) => {
         const next = [...prev];
         next[next.length - 1] = {
           role: 'assistant',
-          content: `大纲已确认，共 ${outline.length} 页：\n${outline.map((s, i) => `${i+1}. [${s.layout}] ${s.title}`).join('\n')}\n\n开始逐页生成…`,
+          content: `${t('genOutlineConfirmed', outline.length)}\n${outline.map((s, i) => `${i+1}. [${s.layout}] ${s.title}`).join('\n')}\n\n${t('genStarting')}`,
         };
         return next;
       });
@@ -159,7 +158,6 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
       setGenStep(1);
       setThinking(false);
 
-      // Step 2: generate each slide one by one
       const allSlides = [];
       let errorCount = 0;
 
@@ -172,8 +170,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
         );
         if (!slideResult.success || !slideResult.data?.slides?.length) {
           errorCount++;
-          setGenError(`幻灯片 ${i + 1} 生成失败`);
-          // Insert minimal fallback slide so deck stays complete
+          setGenError(t('genSlideFailed', i + 1));
           allSlides.push({
             id: s.id || `slide-${i + 1}`,
             layout: s.layout || 'content',
@@ -183,13 +180,12 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
               { type: 'kicker', text: s.kicker || 'SLIDE' },
               { type: 'heading', text: s.title || `Slide ${i + 1}`, gradient: true },
               { type: 'divider' },
-              { type: 'body', text: slideResult.error || '生成失败，请重试' },
+              { type: 'body', text: slideResult.error || t('genFailed') },
             ],
           });
         } else {
           allSlides.push(...slideResult.data.slides);
         }
-        // Apply progressively so user sees slides appearing one by one
         onApplyAction({ action: 'replace_all', slides: [...allSlides] });
       }
 
@@ -198,8 +194,8 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
       setMessages((prev) => [...prev, {
         role: 'assistant',
         content: errorCount > 0
-          ? `✓ ${outline.length} 页已生成，其中 ${errorCount} 页生成失败（已插入占位页）。`
-          : `✓ 全部 ${outline.length} 页幻灯片已生成完成！`,
+          ? t('genDoneWithErrors', outline.length, errorCount)
+          : t('genDoneAll', outline.length),
       }]);
     } catch (err) {
       setGenError(err.message);
@@ -209,11 +205,9 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
     }
   }, [settings, onApplyAction, setMessages]);
 
-  // ── Regular single-turn chat ───────────────────────────────────────────────
   const sendMessage = React.useCallback(async (text) => {
     if (!text.trim() || thinking) return;
 
-    // Route to step-by-step generator for presentation requests
     if (isPresentationRequest(text) && window.openslides?.genOutline) {
       return generatePresentation(text);
     }
@@ -258,19 +252,19 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
   const isGenerating = genOutline && !genDone;
 
   return (
-    <div className="flex flex-col h-full bg-[#16161e] border-l border-[#2a2a3a]">
+    <div className="flex flex-col h-full ui-bg-3" style={{borderLeft:'1px solid var(--ui-border)'}}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a3a] flex-shrink-0 no-drag">
+      <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 no-drag" style={{borderBottom:'1px solid var(--ui-border)'}}>
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-[#6366f1] animate-pulse" />
-          <span className="text-sm font-medium text-[#cdd6f4]">AI Assistant</span>
+          <div className="w-2 h-2 rounded-full animate-pulse" style={{background:'var(--ui-primary)'}} />
+          <span className="text-sm font-medium ui-text-2">{t('aiAssistant')}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-[#8888a8]">{settings?.modelName || 'No model set'}</span>
+          <span className="text-xs ui-text-3">{settings?.modelName || t('noModelSet')}</span>
           <button
             onClick={onNewSession}
-            title="New session"
-            className="w-6 h-6 rounded flex items-center justify-center text-[#8888a8] hover:text-white hover:bg-[#2a2a3a] transition-colors text-xs"
+            title={t('newSession')}
+            className="w-6 h-6 rounded flex items-center justify-center ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors text-xs"
           >
             ✎
           </button>
@@ -295,24 +289,20 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
         <div ref={endRef} />
       </div>
 
-      {/* Generation progress — shown between messages and input */}
+      {/* Generation progress */}
       {genOutline && (
-        <GenerationProgress
-          outline={genOutline}
-          currentStep={genStep}
-          done={genDone}
-          error={genError}
-        />
+        <GenerationProgress outline={genOutline} currentStep={genStep} done={genDone} error={genError} />
       )}
 
       {/* Quick prompts */}
       <div className="px-4 pb-2 flex flex-wrap gap-1.5 flex-shrink-0">
-        {QUICK_PROMPTS.map((p) => (
+        {quickPrompts.map((p) => (
           <button
             key={p}
             onClick={() => sendMessage(p)}
             disabled={thinking || isGenerating}
-            className="text-xs px-3 py-1.5 rounded-full bg-[#1c1c28] border border-[#2a2a3a] text-[#8888a8] hover:text-[#cdd6f4] hover:border-[#4a4a6a] transition-all disabled:opacity-40"
+            className="text-xs px-3 py-1.5 rounded-full ui-bg-4 border ui-border ui-text-3 hover:ui-text-2 hover:ui-border-2 transition-all disabled:opacity-40"
+            style={{borderWidth:1,borderStyle:'solid'}}
           >
             {p}
           </button>
@@ -321,40 +311,47 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
 
       {/* Input area */}
       <div className="px-4 pb-4 pt-2 flex-shrink-0 no-drag">
-        {/* Selected element chip */}
         {selectedElement && (
-          <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-lg bg-[#6366f1]/15 border border-[#6366f1]/40 text-xs text-[#a5b4fc]">
-            <span className="opacity-60">Selected:</span>
+          <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-lg text-xs"
+            style={{background:'rgba(208,64,0,0.12)',border:'1px solid rgba(208,64,0,0.35)',color:'var(--ui-primary)'}}>
+            <span className="opacity-60">{t('selected')}</span>
             <span className="font-medium truncate flex-1">
               [{selectedElement.type}] {selectedElement.text || (selectedElement.items ? selectedElement.items.join(', ') : selectedElement.src || '')}
             </span>
             <button
               onClick={onClearSelection}
-              className="ml-auto opacity-60 hover:opacity-100 transition-opacity text-[#a5b4fc] flex-shrink-0"
+              className="ml-auto opacity-60 hover:opacity-100 transition-opacity flex-shrink-0"
             >
               ✕
             </button>
           </div>
         )}
-        <div className="relative bg-[#1c1c28] border border-[#2a2a3a] rounded-xl focus-within:border-[#6366f1] focus-within:ring-1 focus-within:ring-[#6366f1] transition-all">
+        <div className="relative rounded-xl transition-all" style={{background:'var(--ui-bg-4)',border:'1px solid var(--ui-border)'}}
+          onFocusCapture={e => e.currentTarget.style.borderColor='var(--ui-primary)'}
+          onBlurCapture={e => e.currentTarget.style.borderColor='var(--ui-border)'}
+        >
           <textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="描述你的演示文稿，或对当前幻灯片提出修改… (Enter 发送)"
+            placeholder={t('chatPlaceholder')}
             rows={3}
             disabled={isGenerating}
-            className="w-full bg-transparent px-4 pt-3 pb-10 text-sm text-white placeholder-[#4a4a6a] resize-none focus:outline-none leading-relaxed disabled:opacity-50"
+            className="w-full bg-transparent px-4 pt-3 pb-10 text-sm ui-text resize-none focus:outline-none leading-relaxed disabled:opacity-50"
+            style={{caretColor:'var(--ui-primary)'}}
           />
           <div className="absolute bottom-2 right-2 flex items-center gap-2">
-            <span className="text-xs text-[#4a4a6a]">⏎ send · ⇧⏎ newline</span>
+            <span className="text-xs ui-text-4">{t('sendHelp')}</span>
             <button
               onClick={() => sendMessage(input)}
               disabled={!input.trim() || thinking || isGenerating}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[#6366f1] text-white disabled:opacity-40 hover:bg-[#5254cc] transition-all"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-40 transition-all"
+              style={{background:'var(--ui-primary)'}}
+              onMouseEnter={e => { if (!e.currentTarget.disabled) e.currentTarget.style.background='var(--ui-primary-h)'; }}
+              onMouseLeave={e => e.currentTarget.style.background='var(--ui-primary)'}
             >
-              {thinking ? '…' : isGenerating ? '生成中' : 'Send'}
+              {thinking ? '…' : isGenerating ? t('generating') : t('send')}
             </button>
           </div>
         </div>
@@ -362,4 +359,3 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
     </div>
   );
 }
-

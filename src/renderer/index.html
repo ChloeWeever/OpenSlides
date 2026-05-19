@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
@@ -20,8 +20,19 @@
   <!-- Lucide icons (UMD) -->
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 </head>
-<body class="bg-[#0f0f0f] text-[#e2e8f0] overflow-hidden h-screen">
+<body class="overflow-hidden h-screen">
   <div id="root"></div>
+
+  <!-- i18n strings (plain JS, must load before components) -->
+  <script src="js/i18n.js"></script>
+
+  <!-- Restore theme from localStorage before first paint -->
+  <script>
+    (function(){
+      var t = localStorage.getItem('openslides-theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
 
   <!-- Load JS modules in order via Babel/JSX -->
   <script type="text/babel" data-presets="react" src="js/slide-manager.js"></script>

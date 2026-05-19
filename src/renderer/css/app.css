@@ -1,26 +1,84 @@
-/* Base resets & custom properties */
+/* ── CSS Custom Properties ─────────────────────────────── */
 :root {
-  --radius: 8px;
-  --border: #2a2a3a;
-  --ring: #6366f1;
-  --card: #16161e;
-  --popover: #1c1c28;
-  --muted: #27273a;
-  --muted-fg: #8888a8;
-  --primary: #6366f1;
-  --primary-fg: #ffffff;
-  --accent: #1e1e2e;
-  --accent-fg: #cdd6f4;
-  --scrollbar-w: 6px;
+  /* dark theme (default) */
+  --ui-bg:         #0f0f0f;
+  --ui-bg-2:       #1a1a1a;
+  --ui-bg-3:       #16161e;
+  --ui-bg-4:       #1c1c28;
+  --ui-bg-5:       #27273a;
+  --ui-border:     #2a2a3a;
+  --ui-border-2:   #4a4a6a;
+  --ui-text:       #e2e8f0;
+  --ui-text-2:     #cdd6f4;
+  --ui-text-3:     #8888a8;
+  --ui-text-4:     #4a4a6a;
+  --ui-primary:    #D04000;
+  --ui-primary-h:  #B83800;
+  --ui-primary-fg: #ffffff;
+  --ui-card:       #16161e;
+  --ui-thumb-bg:   #1e1e2e;
+  --radius:        8px;
+  --scrollbar-w:   6px;
 }
 
+[data-theme="light"] {
+  --ui-bg:         #f3f3f3;
+  --ui-bg-2:       #ffffff;
+  --ui-bg-3:       #ffffff;
+  --ui-bg-4:       #f0f0f0;
+  --ui-bg-5:       #e4e4e4;
+  --ui-border:     #d4d4d4;
+  --ui-border-2:   #b0b0b0;
+  --ui-text:       #1a1a1a;
+  --ui-text-2:     #2d2d2d;
+  --ui-text-3:     #666666;
+  --ui-text-4:     #aaaaaa;
+  --ui-primary:    #C43B00;
+  --ui-primary-h:  #A83200;
+  --ui-primary-fg: #ffffff;
+  --ui-card:       #ffffff;
+  --ui-thumb-bg:   #dde0e8;
+}
+
+/* ── Utility classes (theme-aware) ─────────────────────── */
+.ui-bg           { background: var(--ui-bg);    color: var(--ui-text); }
+.ui-bg-2         { background: var(--ui-bg-2);  }
+.ui-bg-3         { background: var(--ui-bg-3);  }
+.ui-bg-4         { background: var(--ui-bg-4);  }
+.ui-bg-5         { background: var(--ui-bg-5);  }
+.ui-card         { background: var(--ui-card);  }
+.ui-text         { color: var(--ui-text);   }
+.ui-text-2       { color: var(--ui-text-2); }
+.ui-text-3       { color: var(--ui-text-3); }
+.ui-text-4       { color: var(--ui-text-4); }
+.ui-border       { border-color: var(--ui-border)   !important; }
+.ui-border-2     { border-color: var(--ui-border-2) !important; }
+.ui-primary      { background: var(--ui-primary) !important; color: var(--ui-primary-fg) !important; }
+.ui-primary-text { color: var(--ui-primary) !important; }
+.ui-primary-border { border-color: var(--ui-primary) !important; }
+
+.hover\:ui-bg-4:hover    { background: var(--ui-bg-4); }
+.hover\:ui-bg-5:hover    { background: var(--ui-bg-5); }
+.hover\:ui-text:hover    { color: var(--ui-text); }
+.hover\:ui-text-2:hover  { color: var(--ui-text-2); }
+.hover\:ui-border-2:hover { border-color: var(--ui-border-2) !important; }
+.hover\:ui-primary-h:hover { background: var(--ui-primary-h) !important; }
+
+.focus\:ui-primary-ring:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ui-primary);
+}
+
+/* ── Base resets ────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
 body {
   margin: 0;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
-  user-select: none; /* overridden per-component below */
+  user-select: none;
+  background: var(--ui-bg);
+  color: var(--ui-text);
 }
 
 .msg-user, .msg-assistant {
@@ -29,21 +87,17 @@ body {
   cursor: text;
 }
 
-/* Custom scrollbar */
+/* ── Custom scrollbar ───────────────────────────────────── */
 ::-webkit-scrollbar { width: var(--scrollbar-w); height: var(--scrollbar-w); }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 9999px; }
-::-webkit-scrollbar-thumb:hover { background: #3a3a54; }
+::-webkit-scrollbar-thumb { background: var(--ui-border); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ui-border-2); }
 
-/* Drag region for frameless window */
-.drag-region {
-  -webkit-app-region: drag;
-}
-.no-drag {
-  -webkit-app-region: no-drag;
-}
+/* ── Drag region for frameless window ───────────────────── */
+.drag-region  { -webkit-app-region: drag;    }
+.no-drag      { -webkit-app-region: no-drag; }
 
-/* Slide thumbnail */
+/* ── Slide thumbnail ────────────────────────────────────── */
 .slide-thumb {
   aspect-ratio: 16/9;
   border-radius: 4px;
@@ -51,52 +105,50 @@ body {
   border: 2px solid transparent;
   cursor: pointer;
   transition: border-color 0.15s, transform 0.15s;
-  background: #1e1e2e;
+  background: var(--ui-thumb-bg);
   flex-shrink: 0;
 }
-.slide-thumb:hover { border-color: #4a4a6a; transform: scale(1.02); }
-.slide-thumb.active { border-color: var(--primary); }
+.slide-thumb:hover  { border-color: var(--ui-border-2); transform: scale(1.02); }
+.slide-thumb.active { border-color: var(--ui-primary); }
 
-/* Iframe */
+/* ── Iframe ─────────────────────────────────────────────── */
 iframe.slide-viewport {
   border: none;
   border-radius: var(--radius);
-  background: #1e1e2e;
+  background: var(--ui-thumb-bg);
   display: block;
-  box-shadow: 0 8px 48px rgba(0,0,0,0.6);
+  box-shadow: 0 8px 48px rgba(0,0,0,0.4);
   flex-shrink: 0;
 }
 
-/* Thinking animation */
+/* ── Thinking animation ─────────────────────────────────── */
 @keyframes thinking-pulse {
   0%, 100% { opacity: 0.3; transform: scale(0.8); }
   50%       { opacity: 1;   transform: scale(1);   }
 }
-
 .thinking-dot {
-  width: 8px;
-  height: 8px;
+  width: 8px; height: 8px;
   border-radius: 50%;
-  background: var(--primary);
+  background: var(--ui-primary);
   animation: thinking-pulse 1.2s ease-in-out infinite;
 }
 .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
 .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
 
-/* Message bubbles */
+/* ── Message bubbles ────────────────────────────────────── */
 .msg-user {
-  background: var(--primary);
-  color: #fff;
+  background: var(--ui-primary);
+  color: var(--ui-primary-fg);
   border-radius: 12px 12px 2px 12px;
 }
 .msg-assistant {
-  background: var(--card);
-  color: var(--accent-fg);
+  background: var(--ui-card);
+  color: var(--ui-text);
   border-radius: 12px 12px 12px 2px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--ui-border);
 }
 
-/* Transition for panels */
+/* ── Panel enter transition ─────────────────────────────── */
 .panel-enter { animation: panel-in 0.2s ease forwards; }
 @keyframes panel-in {
   from { opacity: 0; transform: translateY(4px); }

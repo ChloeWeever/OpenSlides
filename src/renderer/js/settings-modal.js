@@ -1,6 +1,6 @@
-// settings-modal.js — AI configuration dialog (shadcn-style)
+// settings-modal.js — AI configuration dialog
 
-function SettingsModal({ open, onClose, onSave }) {
+function SettingsModal({ open, onClose, onSave, lang }) {
   const [form, setForm] = React.useState({
     apiProvider: 'openai',
     apiKey: '',
@@ -17,9 +17,9 @@ function SettingsModal({ open, onClose, onSave }) {
   }, [open]);
 
   const providerPresets = {
-    openai: { baseUrl: 'https://api.openai.com', modelName: 'gpt-4o' },
+    openai:    { baseUrl: 'https://api.openai.com',  modelName: 'gpt-4o' },
     anthropic: { baseUrl: 'https://api.anthropic.com', modelName: 'claude-3-5-sonnet-20241022' },
-    litellm: { baseUrl: 'http://localhost:4000', modelName: 'gpt-4o' },
+    litellm:   { baseUrl: 'http://localhost:4000',   modelName: 'gpt-4o' },
   };
 
   const handleProviderChange = (provider) => {
@@ -35,18 +35,20 @@ function SettingsModal({ open, onClose, onSave }) {
 
   if (!open) return null;
 
+  const inputCls = 'w-full ui-bg-4 border ui-border rounded-lg px-3 py-2 text-sm ui-text ui-text-4 focus:ui-primary-ring transition-all';
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm no-drag">
-      <div className="bg-[#16161e] border border-[#2a2a3a] rounded-xl shadow-2xl w-full max-w-md p-6 panel-enter">
+      <div className="ui-bg-3 border ui-border rounded-xl shadow-2xl w-full max-w-md p-6 panel-enter" style={{borderWidth:1,borderStyle:'solid'}}>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-lg font-semibold text-white">AI Settings</h2>
-            <p className="text-sm text-[#8888a8] mt-0.5">Configure your LLM provider</p>
+            <h2 className="text-lg font-semibold ui-text">{t('aiSettings')}</h2>
+            <p className="text-sm ui-text-3 mt-0.5">{t('configureProvider')}</p>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#8888a8] hover:text-white hover:bg-[#2a2a3a] transition-colors"
+            className="w-8 h-8 rounded-lg flex items-center justify-center ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors"
           >
             ✕
           </button>
@@ -55,7 +57,7 @@ function SettingsModal({ open, onClose, onSave }) {
         <div className="space-y-4">
           {/* Provider */}
           <div>
-            <label className="block text-sm font-medium text-[#cdd6f4] mb-1.5">Provider</label>
+            <label className="block text-sm font-medium ui-text-2 mb-1.5">{t('provider')}</label>
             <div className="grid grid-cols-3 gap-2">
               {['openai', 'anthropic', 'litellm'].map((p) => (
                 <button
@@ -63,9 +65,10 @@ function SettingsModal({ open, onClose, onSave }) {
                   onClick={() => handleProviderChange(p)}
                   className={`px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
                     form.apiProvider === p
-                      ? 'bg-[#6366f1] border-[#6366f1] text-white'
-                      : 'bg-[#1c1c28] border-[#2a2a3a] text-[#8888a8] hover:text-white hover:border-[#4a4a6a]'
+                      ? 'ui-primary'
+                      : 'ui-bg-4 ui-border ui-text-3 hover:ui-text hover:ui-border-2'
                   }`}
+                  style={form.apiProvider === p ? {borderWidth:1,borderStyle:'solid',borderColor:'var(--ui-primary)'} : {borderWidth:1,borderStyle:'solid'}}
                 >
                   {p === 'openai' ? 'OpenAI' : p === 'anthropic' ? 'Anthropic' : 'LiteLLM'}
                 </button>
@@ -75,36 +78,45 @@ function SettingsModal({ open, onClose, onSave }) {
 
           {/* API Key */}
           <div>
-            <label className="block text-sm font-medium text-[#cdd6f4] mb-1.5">API Key</label>
+            <label className="block text-sm font-medium ui-text-2 mb-1.5">{t('apiKey')}</label>
             <input
               type="password"
               value={form.apiKey}
               onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
               placeholder="sk-..."
-              className="w-full bg-[#1c1c28] border border-[#2a2a3a] rounded-lg px-3 py-2 text-sm text-white placeholder-[#4a4a6a] focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-transparent transition-all"
+              className={inputCls}
+              style={{outline:'none'}}
+              onFocus={e => e.target.style.boxShadow='0 0 0 2px var(--ui-primary)'}
+              onBlur={e => e.target.style.boxShadow=''}
             />
           </div>
 
           {/* Base URL */}
           <div>
-            <label className="block text-sm font-medium text-[#cdd6f4] mb-1.5">Base URL</label>
+            <label className="block text-sm font-medium ui-text-2 mb-1.5">{t('baseUrl')}</label>
             <input
               type="text"
               value={form.baseUrl}
               onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
-              className="w-full bg-[#1c1c28] border border-[#2a2a3a] rounded-lg px-3 py-2 text-sm text-white placeholder-[#4a4a6a] focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-transparent transition-all"
+              className={inputCls}
+              style={{outline:'none'}}
+              onFocus={e => e.target.style.boxShadow='0 0 0 2px var(--ui-primary)'}
+              onBlur={e => e.target.style.boxShadow=''}
             />
           </div>
 
           {/* Model */}
           <div>
-            <label className="block text-sm font-medium text-[#cdd6f4] mb-1.5">Model</label>
+            <label className="block text-sm font-medium ui-text-2 mb-1.5">{t('model')}</label>
             <input
               type="text"
               value={form.modelName}
               onChange={(e) => setForm((f) => ({ ...f, modelName: e.target.value }))}
               placeholder="gpt-4o"
-              className="w-full bg-[#1c1c28] border border-[#2a2a3a] rounded-lg px-3 py-2 text-sm text-white placeholder-[#4a4a6a] focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-transparent transition-all"
+              className={inputCls}
+              style={{outline:'none'}}
+              onFocus={e => e.target.style.boxShadow='0 0 0 2px var(--ui-primary)'}
+              onBlur={e => e.target.style.boxShadow=''}
             />
           </div>
         </div>
@@ -113,15 +125,19 @@ function SettingsModal({ open, onClose, onSave }) {
         <div className="flex gap-3 mt-6">
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-[#1c1c28] border border-[#2a2a3a] text-[#8888a8] hover:text-white hover:border-[#4a4a6a] transition-all"
+            className="flex-1 px-4 py-2 rounded-lg text-sm font-medium ui-bg-4 border ui-border ui-text-3 hover:ui-text hover:ui-border-2 transition-all"
+            style={{borderWidth:1,borderStyle:'solid'}}
           >
-            Cancel
+            {t('cancel')}
           </button>
           <button
             onClick={handleSave}
-            className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-[#6366f1] text-white hover:bg-[#5254cc] transition-all"
+            className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-white transition-all"
+            style={{background:'var(--ui-primary)'}}
+            onMouseEnter={e => e.currentTarget.style.background='var(--ui-primary-h)'}
+            onMouseLeave={e => e.currentTarget.style.background='var(--ui-primary)'}
           >
-            Save Settings
+            {t('saveSettings')}
           </button>
         </div>
       </div>

@@ -36,7 +36,25 @@ function App() {
   });
   const [selectedElement, setSelectedElement] = React.useState(null);
   const [showEditor, setShowEditor] = React.useState(false);
-  const previewSlideRef = React.useRef(null); // holds the handlePreviewSlide fn from PreviewPanel
+  const previewSlideRef = React.useRef(null);
+
+  // Theme & language
+  const [theme, setTheme] = React.useState(
+    () => localStorage.getItem('openslides-theme') || 'dark'
+  );
+  const [lang, setLangState] = React.useState(() => window._lang || 'zh');
+
+  React.useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('openslides-theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
+  const toggleLang = () => {
+    const next = lang === 'zh' ? 'en' : 'zh';
+    setLangState(next);
+    window.setLang(next);
+  };
 
   // Session state
   const [sessions, setSessions] = React.useState([]);
@@ -197,7 +215,7 @@ function App() {
   const needsSetup = !settings.apiKey;
 
   return (
-    <div className="flex flex-col h-screen bg-[#0f0f0f] overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden ui-bg">
       {/* Session sidebar */}
       <SessionSidebar
         open={sidebarOpen}
@@ -207,37 +225,51 @@ function App() {
         onNew={handleNewSession}
         onDelete={handleDeleteSession}
         onClose={() => setSidebarOpen(false)}
+        lang={lang}
       />
 
       {/* Title bar / header */}
-      <header className="flex items-center h-9 px-4 bg-[#1a1a1a] border-b border-[#2a2a3a] flex-shrink-0">
+      <header className="flex items-center h-9 px-4 ui-bg-2 border-b ui-border flex-shrink-0" style={{borderBottomWidth:1,borderBottomStyle:'solid'}}>
         {/* Sidebar toggle */}
         <button
           onClick={() => setSidebarOpen(true)}
-          title="Sessions"
-          className="w-7 h-7 rounded-md flex items-center justify-center text-[#8888a8] hover:text-white hover:bg-[#2a2a3a] transition-colors mr-2 text-xs"
+          title={t('sessions')}
+          className="w-7 h-7 rounded-md flex items-center justify-center ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors mr-2 text-xs"
         >
           ☰
         </button>
-        <span className="text-sm font-semibold text-white tracking-tight">OpenSlides</span>
-        <span className="text-xs text-[#4a4a6a] ml-2 truncate max-w-[200px]">
-          {sessions.find((s) => s.id === activeSessionId)?.title || 'AI Presentation Editor'}
+        <span className="text-sm font-semibold ui-text tracking-tight">OpenSlides</span>
+        <span className="text-xs ui-text-4 ml-2 truncate max-w-[200px]">
+          {sessions.find((s) => s.id === activeSessionId)?.title || t('aiPresentationEditor')}
         </span>
         <div className="flex-1" />
         {needsSetup && (
-          <span className="text-xs text-amber-400 mr-3">⚠ Configure AI settings to get started</span>
+          <span className="text-xs text-amber-400 mr-3">{t('configureAI')}</span>
         )}
         <button
           onClick={() => setExportOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs text-[#8888a8] hover:text-white hover:bg-[#2a2a3a] transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors"
         >
-          ↑ Export
+          {t('export')}
         </button>
         <button
           onClick={() => setSettingsOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs text-[#8888a8] hover:text-white hover:bg-[#2a2a3a] transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors"
         >
-          ⚙ Settings
+          {t('settings')}
+        </button>
+        <button
+          onClick={toggleTheme}
+          title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors"
+        >
+          {theme === 'dark' ? t('lightMode') : t('darkMode')}
+        </button>
+        <button
+          onClick={toggleLang}
+          className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors"
+        >
+          {t('langLabel')}
         </button>
       </header>
 
@@ -267,6 +299,7 @@ function App() {
               setShowEditor(false);
             }}
             onRegisterPreview={(fn) => { previewSlideRef.current = fn; }}
+            lang={lang}
           />
         </div>
         <div className="flex-[2] min-w-0 overflow-hidden" style={{ minWidth: 320, maxWidth: 480 }}>
@@ -281,6 +314,7 @@ function App() {
                 slideManager.applyAction({ action: 'update_slide', slideId: updatedSlide.id, slide: updatedSlide });
               }}
               onPreview={(draft) => previewSlideRef.current?.(draft)}
+              lang={lang}
             />
           ) : (
             <ChatPanel
@@ -293,6 +327,7 @@ function App() {
               messages={messages}
               setMessages={setMessages}
               onNewSession={handleNewSession}
+              lang={lang}
             />
           )}
         </div>
@@ -302,12 +337,14 @@ function App() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         onSave={handleSettingsSave}
+        lang={lang}
       />
       <ExportModal
         open={exportOpen}
         onClose={() => setExportOpen(false)}
         slides={slideManager.slides}
         title={sessions.find((s) => s.id === activeSessionId)?.title || 'presentation'}
+        lang={lang}
       />
     </div>
   );
