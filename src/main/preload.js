@@ -16,4 +16,6 @@ contextBridge.exposeInMainWorld('openslides', {
   exportHtml: (data) => ipcRenderer.invoke('export:html', data),
   exportPdf: (data) => ipcRenderer.invoke('export:pdf', data),
   pickImage: () => ipcRenderer.invoke('image:pick'),
+  getLogo: () => ipcRenderer.invoke('logo:get'),
+  saveLogo: (logo) => ipcRenderer.invoke('logo:save', logo),
 });

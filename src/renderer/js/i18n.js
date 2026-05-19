@@ -93,6 +93,21 @@ const STRINGS = {
     newSlide:            'New slide',
     exitPresent:         'Exit (Esc)',
 
+    // brand logo modal
+    brandLogo:           '🖼 Brand Logo',
+    brandLogoDesc:       'Add a logo overlay to every template slide',
+    logoImage:           'Logo Image',
+    uploadLogo:          'Upload Image',
+    removeLogo:          'Remove Logo',
+    logoPosition:        'Position',
+    topleft:             'Top Left',
+    topright:            'Top Right',
+    bottomleft:          'Bottom Left',
+    bottomright:         'Bottom Right',
+    logoWidth:           'Width',
+    logoOpacity:         'Opacity',
+    logoEnabled:         'Show Logo',
+
     // slide editor panel
     editSlidePanelTitle: 'Edit Slide',
     apply:               'Apply',
@@ -191,6 +206,21 @@ const STRINGS = {
     delete:              '删除',
     newSlide:            '新建幻灯片',
     exitPresent:         '退出 (Esc)',
+
+    // brand logo modal
+    brandLogo:           '🖼 品牌 Logo',
+    brandLogoDesc:       '为每张模板幻灯片添加 Logo 水印',
+    logoImage:           'Logo 图片',
+    uploadLogo:          '上传图片',
+    removeLogo:          '删除 Logo',
+    logoPosition:        '位置',
+    topleft:             '左上',
+    topright:            '右上',
+    bottomleft:          '左下',
+    bottomright:         '右下',
+    logoWidth:           '宽度',
+    logoOpacity:         '透明度',
+    logoEnabled:         '显示 Logo',
 
     // slide editor panel
     editSlidePanelTitle: '编辑幻灯片',

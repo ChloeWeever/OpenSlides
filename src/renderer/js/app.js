@@ -28,6 +28,8 @@ function App() {
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const [exportOpen, setExportOpen] = React.useState(false);
+  const [logoOpen, setLogoOpen] = React.useState(false);
+  const [logo, setLogo] = React.useState(null);
   const [settings, setSettings] = React.useState({
     apiProvider: 'openai',
     apiKey: '',
@@ -65,6 +67,7 @@ function App() {
   React.useEffect(() => {
     if (!window.openslides) return;
     window.openslides.getSettings().then((s) => { if (s) setSettings(s); });
+    window.openslides.getLogo().then((l) => { if (l) setLogo(l); });
     window.openslides.listSessions().then((savedSessions) => {
       if (savedSessions?.length) {
         setSessions(savedSessions);
@@ -259,6 +262,13 @@ function App() {
           {t('settings')}
         </button>
         <button
+          onClick={() => setLogoOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors"
+          title={t('brandLogo')}
+        >
+          🖼
+        </button>
+        <button
           onClick={toggleTheme}
           title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
           className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors"
@@ -300,6 +310,7 @@ function App() {
             }}
             onRegisterPreview={(fn) => { previewSlideRef.current = fn; }}
             lang={lang}
+            logo={logo}
           />
         </div>
         <div className="flex-[2] min-w-0 overflow-hidden" style={{ minWidth: 320, maxWidth: 480 }}>
@@ -345,6 +356,11 @@ function App() {
         slides={slideManager.slides}
         title={sessions.find((s) => s.id === activeSessionId)?.title || 'presentation'}
         lang={lang}
+      />
+      <BrandLogoModal
+        open={logoOpen}
+        onClose={() => setLogoOpen(false)}
+        onSave={(l) => setLogo(l)}
       />
     </div>
   );

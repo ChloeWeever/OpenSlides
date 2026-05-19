@@ -26,7 +26,7 @@ function resolveThemeColors(container) {
   };
 }
 
-function renderSlide(container, slide) {
+function renderSlide(container, slide, logo) {
   if (slide.soloHtml) {
     container.className = 'slide-container';
     container.style.cssText = 'padding:0;overflow:hidden;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;';
@@ -95,6 +95,26 @@ function renderSlide(container, slide) {
 
   // Re-apply selection highlight after re-render
   if (selectedIndex !== null) applyHighlight(selectedIndex);
+  renderLogo(container, logo);
+}
+
+function renderLogo(container, logo) {
+  const existing = container.querySelector('.slide-logo');
+  if (existing) existing.remove();
+  if (!logo?.enabled || !logo?.dataUrl) return;
+  const img = document.createElement('img');
+  img.className = 'slide-logo';
+  const pad = '16px';
+  const pos = logo.position || 'bottom-right';
+  img.style.cssText = [
+    'position:absolute', 'z-index:10', 'pointer-events:none',
+    `width:${logo.width || 80}px`,
+    `opacity:${logo.opacity ?? 1}`,
+    pos.includes('top')  ? `top:${pad}`    : `bottom:${pad}`,
+    pos.includes('left') ? `left:${pad}`   : `right:${pad}`,
+  ].join(';');
+  img.src = logo.dataUrl;
+  container.appendChild(img);
 }
 
 function esc(str) {
@@ -805,17 +825,17 @@ function getAnimClasses(transition, direction) {
 }
 
 window.addEventListener('message', (event) => {
-  const { type, slide, direction } = event.data || {};
+  const { type, slide, direction, logo } = event.data || {};
   if (type === 'render') {
     selectedIndex = null;
     notifySelection(null);
-    showSlideSimple(slide, direction);
+    showSlideSimple(slide, direction, logo);
   }
 });
 
 let animTimer = null;
 
-function showSlideSimple(slide, direction) {
+function showSlideSimple(slide, direction, logo) {
   // Cancel any in-flight animation immediately
   if (animTimer !== null) {
     clearTimeout(animTimer);
@@ -834,7 +854,7 @@ function showSlideSimple(slide, direction) {
 
   // No transition: render directly into current
   if (!currentSlide || !slide.transition || slide.transition === 'none' || direction === 'none' || currentSlide?.id === slide.id) {
-    renderSlide(current, slide);
+    renderSlide(current, slide, logo);
     current.classList.remove('hidden');
     currentSlide = slide;
     return;
@@ -842,13 +862,13 @@ function showSlideSimple(slide, direction) {
 
   const anim = getAnimClasses(slide.transition, direction);
   if (!anim) {
-    renderSlide(current, slide);
+    renderSlide(current, slide, logo);
     currentSlide = slide;
     return;
   }
 
   // Render new slide into `next`, animate both, then promote `next` → `current`
-  renderSlide(next, slide);
+  renderSlide(next, slide, logo);
   next.classList.remove('hidden');
   next.style.visibility = 'visible';
   next.style.pointerEvents = 'auto';
@@ -864,7 +884,7 @@ function showSlideSimple(slide, direction) {
     animTimer = null;
 
     // Swap: render the new slide fresh into `current` (avoids innerHTML/canvas loss)
-    renderSlide(current, slide);
+    renderSlide(current, slide, logo);
     if (!slide.soloHtml) {
       current.className = `slide-container layout-${slide.layout || 'content'}`;
       current.style.background = slide.background || '';

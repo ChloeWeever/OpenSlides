@@ -392,7 +392,7 @@ function ThumbnailStrip({ slides, currentIndex, onGoTo, onReorder, onAdd, onDupl
   );
 }
 
-function FullscreenPresenter({ slides, startIndex, onClose }) {
+function FullscreenPresenter({ slides, startIndex, onClose, logo }) {
   const [index, setIndex] = React.useState(startIndex);
   const [showControls, setShowControls] = React.useState(true);
   const [direction, setDirection] = React.useState('forward');
@@ -407,7 +407,7 @@ function FullscreenPresenter({ slides, startIndex, onClose }) {
   React.useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
-    const send = () => { iframe.contentWindow?.postMessage({ type: 'render', slide, direction }, '*'); };
+    const send = () => { iframe.contentWindow?.postMessage({ type: 'render', slide, direction, logo }, '*'); };
     if (iframe.contentDocument?.readyState === 'complete') send();
     else iframe.onload = send;
   }, [slide, direction]);
@@ -531,7 +531,7 @@ function ImageTray({ slide, onApplyAction }) {
 }
 
 // ── PreviewPanel ──────────────────────────────────────────────────────────────
-function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, onPrev, onGoTo, onReorder, onApplyAction, onSave, onElementSelected, canUndo, canRedo, onUndo, onRedo, showEditor, onOpenEditor, onCloseEditor, onRegisterPreview, lang }) {
+function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, onPrev, onGoTo, onReorder, onApplyAction, onSave, onElementSelected, canUndo, canRedo, onUndo, onRedo, showEditor, onOpenEditor, onCloseEditor, onRegisterPreview, lang, logo }) {
   const iframeRef = React.useRef(null);
   const viewportContainerRef = React.useRef(null);
   const [viewportSize, setViewportSize] = React.useState({ width: 0, height: 0 });
@@ -567,8 +567,8 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
   const handlePreviewSlide = React.useCallback((previewSlide) => {
     const iframe = iframeRef.current;
     if (!iframe) return;
-    iframe.contentWindow?.postMessage({ type: 'render', slide: previewSlide, direction: 'none' }, '*');
-  }, []);
+    iframe.contentWindow?.postMessage({ type: 'render', slide: previewSlide, direction: 'none', logo }, '*');
+  }, [logo]);
 
   React.useEffect(() => {
     onRegisterPreview?.(handlePreviewSlide);
@@ -638,7 +638,7 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
   React.useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
-    const msg = { type: 'render', slide: currentSlide, direction: direction.current };
+    const msg = { type: 'render', slide: currentSlide, direction: direction.current, logo };
     const send = () => iframe.contentWindow?.postMessage(msg, '*');
     let cancelled = false;
     if (iframe.contentDocument?.readyState === 'complete') send();
@@ -670,7 +670,7 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
 
   return (
     <div className="flex flex-col h-full ui-bg select-none">
-      {fullscreen && <FullscreenPresenter slides={slides} startIndex={currentIndex} onClose={() => setFullscreen(false)} />}
+      {fullscreen && <FullscreenPresenter slides={slides} startIndex={currentIndex} onClose={() => setFullscreen(false)} logo={logo} />}
 
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2.5 no-drag flex-shrink-0" style={{borderBottom:'1px solid var(--ui-border)'}}>

@@ -266,6 +266,9 @@ ipcMain.handle('settings:save', (_event, settings) => {
   return true;
 });
 
+ipcMain.handle('logo:get', () => store.get('logo', null));
+ipcMain.handle('logo:save', (_event, logo) => { store.set('logo', logo); return true; });
+
 ipcMain.handle('presentation:save', (_event, data) => {
   store.set('presentation', data);
   return true;
@@ -504,7 +507,7 @@ function themeVarsStyle(tv) {
   ].filter(Boolean).join(';');
 }
 
-function buildSlideDiv(slide, extraClass) {
+function buildSlideDiv(slide, extraClass, logo) {
   if (slide.soloHtml) {
     const escaped = slide.soloHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
     const cls = extraClass && extraClass !== 'slide-page' ? ` ${extraClass}` : '';
@@ -518,11 +521,20 @@ function buildSlideDiv(slide, extraClass) {
   const inner = renderElements(slide.elements, layout, slide.sectionNum);
   const tv = themeVarsStyle(slide.themeVars);
   const style = `background:${bg};color:${color}${tv ? ';' + tv : ''}`;
-  return `<div class="slide-container layout-${layout}${extraClass?' '+extraClass:''}" style="${style}">${inner}</div>`;
+  const logoHtml = (logo?.enabled && logo?.dataUrl) ? buildLogoHtml(logo) : '';
+  return `<div class="slide-container layout-${layout}${extraClass?' '+extraClass:''}" style="${style}">${inner}${logoHtml}</div>`;
 }
 
-function buildStandaloneHTML(slides, title) {
-  const slideBlocks = slides.map(s => buildSlideDiv(s, 'slide-page')).join('\n');
+function buildLogoHtml(logo) {
+  const pos = logo.position || 'bottom-right';
+  const pad = '16px';
+  const top  = pos.includes('top')  ? `top:${pad}`  : `bottom:${pad}`;
+  const side = pos.includes('left') ? `left:${pad}` : `right:${pad}`;
+  return `<img src="${logo.dataUrl}" style="position:absolute;z-index:10;pointer-events:none;width:${logo.width||80}px;opacity:${logo.opacity??1};${top};${side};" alt="logo"/>`;
+}
+
+function buildStandaloneHTML(slides, title, logo) {
+  const slideBlocks = slides.map(s => buildSlideDiv(s, 'slide-page', logo)).join('\n');
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -617,7 +629,8 @@ ipcMain.handle('export:html', async (_event, { slides, title }) => {
   });
   if (canceled || !filePath) return { success: false };
   try {
-    fs.writeFileSync(filePath, buildStandaloneHTML(slides, title), 'utf8');
+    const logo = store.get('logo', null);
+    fs.writeFileSync(filePath, buildStandaloneHTML(slides, title, logo), 'utf8');
     return { success: true, filePath };
   } catch (err) {
     return { success: false, error: err.message };
