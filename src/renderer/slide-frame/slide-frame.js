@@ -355,8 +355,15 @@ function renderChartJS(container, el) {
     container.innerHTML = '<div style="color:#f38ba8;font-size:13px;padding:16px">Chart.js not loaded</div>';
     return;
   }
+  // Fixed dimensions — responsive:true would attach a ResizeObserver that causes
+  // a post-paint reflow which pushes slide elements outward
+  const isPie = el.kind === 'pie' || el.kind === 'doughnut';
+  const W = isPie ? 400 : 640;
+  const H = isPie ? 360 : 340;
   const canvas = document.createElement('canvas');
-  canvas.style.cssText = 'max-width:100%;max-height:52vh;';
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.cssText = `width:${W}px;height:${H}px;max-width:100%;display:block;`;
   container.appendChild(canvas);
 
   const { text1, text2, accent } = themeColors;
@@ -379,13 +386,11 @@ function renderChartJS(container, el) {
     };
   });
 
-  const isPie = el.kind === 'pie' || el.kind === 'doughnut';
   new Chart(canvas, {
     type: el.kind,
     data: { labels: el.labels || [], datasets },
     options: {
-      responsive: true,
-      maintainAspectRatio: true,
+      responsive: false,
       animation: { duration: 600 },
       plugins: {
         legend: {
