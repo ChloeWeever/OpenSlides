@@ -145,9 +145,17 @@ async function invokeWithTool(llm, messages, toolName, label, t0) {
   const response = await llm.invoke(messages);
   log.info(`  invokeWithTool: response type=${response._getType?.() ?? typeof response}, tool_calls=${response.tool_calls?.length ?? 0}`);
 
+  // Log raw additional_kwargs to see what LiteLLM actually returned
+  if (response.additional_kwargs?.tool_calls?.length) {
+    response.additional_kwargs.tool_calls.forEach((tc, i) => {
+      const fnArgs = tc.function?.arguments ?? '(none)';
+      log.info(`    raw tool_call[${i}]: ${tc.function?.name}, args size=${fnArgs.length}, args preview: ${fnArgs.slice(0, 300)}`);
+    });
+  }
+
   if (response.tool_calls?.length) {
     response.tool_calls.forEach(tc =>
-      log.info(`    tool_call: ${tc.name}, args keys: ${Object.keys(tc.args || {}).join(', ')}, size: ${JSON.stringify(tc.args).length}`)
+      log.info(`    parsed tool_call: ${tc.name}, args keys: [${Object.keys(tc.args || {}).join(', ')}], size: ${JSON.stringify(tc.args).length}`)
     );
   }
 
@@ -159,6 +167,22 @@ async function invokeWithTool(llm, messages, toolName, label, t0) {
     log.error(`  invokeWithTool: no "${toolName}" tool call in response. Content: ${preview}`);
     throw new Error(`${label}: model did not call ${toolName} tool`);
   }
+
+  // If args is empty but raw additional_kwargs has the data, parse it directly
+  if ((!tc.args || Object.keys(tc.args).length === 0) && response.additional_kwargs?.tool_calls?.length) {
+    const rawTc = response.additional_kwargs.tool_calls.find(r => r.function?.name === toolName);
+    if (rawTc?.function?.arguments) {
+      log.warn(`  invokeWithTool: args empty from LangChain parser, falling back to raw JSON parse`);
+      try {
+        const parsed = JSON.parse(rawTc.function.arguments);
+        log.info(`  invokeWithTool: raw parse succeeded, keys: [${Object.keys(parsed).join(', ')}]`);
+        return parsed;
+      } catch (e) {
+        log.error(`  invokeWithTool: raw JSON parse failed: ${e.message}`);
+      }
+    }
+  }
+
   return tc.args;
 }
 
