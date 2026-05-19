@@ -98,6 +98,7 @@ function useSlideManager() {
     switch (data.action) {
       case 'replace_all':
         if (Array.isArray(data.slides) && data.slides.length > 0) {
+          lastDirection.current = 'none';
           pushHistory(data.slides);
           setCurrentIndex(0);
         }
@@ -138,6 +139,7 @@ function useSlideManager() {
     if (window.openslides) {
       const data = await window.openslides.loadPresentation();
       if (data?.slides?.length) {
+        lastDirection.current = 'none';
         setHistory([data.slides]);
         setPointer(0);
         setCurrentIndex(data.currentIndex ?? 0);
@@ -147,6 +149,7 @@ function useSlideManager() {
 
   const loadFromSlides = React.useCallback((newSlides) => {
     const slides = newSlides?.length ? newSlides : DEFAULT_SLIDES;
+    lastDirection.current = 'none';
     setHistory([slides]);
     setPointer(0);
     setCurrentIndex(0);
