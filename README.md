@@ -19,11 +19,9 @@
 
 ![](example/1.png)
 
-**Live demo:** [Introduce OpenSlides — Built by Solo mode · SAP design style](https://chloeweever.github.io/OpenSlides/example/Introduce-OpenSlides.html)
-
-**Live demo:** [History of AI — Built by Template mode](https://chloeweever.github.io/OpenSlides/example/History-of-AI.html)
-
-> Both demos were generated with **claude-sonnet-4-6** in OpenSlides.
+**Live demos** (generated with **claude-sonnet-4-6**):
+- [Introduce OpenSlides — Solo mode · SAP design style](https://chloeweever.github.io/OpenSlides/example/Introduce-OpenSlides.html)
+- [History of AI — Template mode](https://chloeweever.github.io/OpenSlides/example/History-of-AI.html)
 
 - **AI generation** — describe your presentation in natural language; the AI generates a full deck slide by slide
 - **Two generation modes**
