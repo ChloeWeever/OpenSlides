@@ -314,7 +314,10 @@ Output the complete HTML document now.`;
   let html = typeof response.content === 'string'
     ? response.content
     : Array.isArray(response.content)
-      ? response.content.map(b => (typeof b === 'string' ? b : b.text ?? '')).join('')
+      ? response.content
+          .filter(b => typeof b === 'string' || b.type === 'text')
+          .map(b => (typeof b === 'string' ? b : b.text ?? ''))
+          .join('')
       : String(response.content ?? '');
 
   // Strip markdown fences if model wrapped the HTML
