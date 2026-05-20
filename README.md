@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue.svg" alt="GPL-3.0 License"/></a>
   <img src="https://img.shields.io/badge/electron-29-47848F?logo=electron" alt="Electron 29"/>
   <img src="https://img.shields.io/badge/react-18-61DAFB?logo=react" alt="React 18"/>
 </p>
@@ -99,4 +99,4 @@ Packaged output appears in `out/`.
 
 ## License
 
-MIT © [Chloe Weever](https://github.com/ChloeWeever) — see [LICENSE](LICENSE) for details.
+GPL-3.0 © [Chloe Weever](https://github.com/ChloeWeever) — see [LICENSE](LICENSE) for details.
