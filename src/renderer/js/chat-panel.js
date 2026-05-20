@@ -87,7 +87,7 @@ function GenerationProgress({ outline, currentStep, done, error }) {
   );
 }
 
-function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElement, onClearSelection, messages, setMessages, onNewSession, lang }) {
+function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElement, onClearSelection, messages, setMessages, onNewSession, onBusyChange, lang }) {
   const [input, setInput] = React.useState('');
   const [thinking, setThinking] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -108,6 +108,11 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
   React.useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, thinking, genOutline]);
+
+  const isGenerating = genOutline && !genDone;
+  React.useEffect(() => {
+    onBusyChange?.(thinking || !!isGenerating);
+  }, [thinking, isGenerating, onBusyChange]);
 
   const buildContext = React.useCallback(() => {
     const summarizeSlide = (s) => {
@@ -359,8 +364,6 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
     }
   };
 
-  const isGenerating = genOutline && !genDone;
-
   return (
     <div className="flex flex-col h-full ui-bg-3" style={{borderLeft:'1px solid var(--ui-border)'}}>
       {/* Header */}
@@ -373,7 +376,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
           <span className="text-xs ui-text-3">{settings?.modelName || t('noModelSet')}</span>
           <button
             onClick={onNewSession}
-            disabled={thinking || !!(genOutline && !genDone)}
+            disabled={thinking || isGenerating}
             title={t('newSession')}
             className="w-6 h-6 rounded flex items-center justify-center ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors text-xs disabled:opacity-30 disabled:cursor-not-allowed"
           >

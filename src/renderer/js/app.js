@@ -38,6 +38,7 @@ function App() {
   });
   const [selectedElement, setSelectedElement] = React.useState(null);
   const [showEditor, setShowEditor] = React.useState(false);
+  const [isBusy, setIsBusy] = React.useState(false);
   const previewSlideRef = React.useRef(null);
 
   // Theme & language
@@ -228,6 +229,7 @@ function App() {
         onNew={handleNewSession}
         onDelete={handleDeleteSession}
         onClose={() => setSidebarOpen(false)}
+        disabled={isBusy}
         lang={lang}
       />
 
@@ -332,6 +334,7 @@ function App() {
               messages={messages}
               setMessages={setMessages}
               onNewSession={handleNewSession}
+              onBusyChange={setIsBusy}
               lang={lang}
             />
           )}

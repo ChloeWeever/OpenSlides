@@ -1,6 +1,6 @@
 // session-sidebar.js — chat session history sidebar
 
-function SessionSidebar({ open, sessions, activeId, onSelect, onNew, onDelete, onClose, lang }) {
+function SessionSidebar({ open, sessions, activeId, onSelect, onNew, onDelete, onClose, disabled, lang }) {
   const [confirmDelete, setConfirmDelete] = React.useState(null);
 
   const handleDelete = (e, id) => {
@@ -50,12 +50,12 @@ function SessionSidebar({ open, sessions, activeId, onSelect, onNew, onDelete, o
         <div className="px-3 py-2.5 flex-shrink-0">
           <button
             onClick={onNew}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-white text-sm font-medium transition-all"
+            disabled={disabled}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-white text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{background:'var(--ui-primary)'}}
-            onMouseEnter={e => e.currentTarget.style.background='var(--ui-primary-h)'}
+            onMouseEnter={e => { if (!e.currentTarget.disabled) e.currentTarget.style.background='var(--ui-primary-h)'; }}
             onMouseLeave={e => e.currentTarget.style.background='var(--ui-primary)'}
           >
-            <span className="text-base leading-none">+</span>
             {t('newPresentation')}
           </button>
         </div>
