@@ -119,6 +119,7 @@ function buildPlainModel(settings, maxTokens = 8192) {
       model: cleanModel,
       maxTokens,
       thinking: { type: 'disabled' },
+      streaming: true,
     });
   }
   // openai / litellm
