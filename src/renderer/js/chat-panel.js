@@ -373,7 +373,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
           <span className="text-xs ui-text-3">{settings?.modelName || t('noModelSet')}</span>
           <button
             onClick={onNewSession}
-            disabled={!!(genOutline && !genDone)}
+            disabled={thinking || !!(genOutline && !genDone)}
             title={t('newSession')}
             className="w-6 h-6 rounded flex items-center justify-center ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors text-xs disabled:opacity-30 disabled:cursor-not-allowed"
           >
