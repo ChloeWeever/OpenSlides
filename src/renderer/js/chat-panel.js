@@ -50,12 +50,13 @@ function GenerationProgress({ outline, currentStep, done, error, onStop }) {
       </div>
       {!collapsed && (
         <>
-          <div className="p-2 flex flex-col gap-1">
+          <div className="p-2 flex flex-col gap-1 overflow-y-auto" style={{maxHeight:'240px'}}>
             {outline.map((s, i) => {
               const state = i < currentStep - 1 ? 'done' : i === currentStep - 1 ? 'active' : 'pending';
               return (
                 <div key={s.id} className={`flex flex-col px-2 py-1.5 rounded-lg text-xs transition-colors`}
-                  style={state === 'active' ? {background:'rgba(208,64,0,0.12)'} : {}}>
+                  style={state === 'active' ? {background:'rgba(208,64,0,0.12)'} : {}}
+                  ref={state === 'active' ? el => el?.scrollIntoView({ block:'nearest', behavior:'smooth' }) : null}>
                   <div className="flex items-center gap-2">
                     <span className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
                       style={
