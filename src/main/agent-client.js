@@ -114,8 +114,14 @@ function buildPlainModel(settings, maxTokens = 8192) {
   if (provider === 'anthropic') {
     const cleanModel = (settings.modelName || 'claude-3-5-sonnet-20241022').replace(/^anthropic[-/]+/i, '');
     log.info(`buildPlainModel: anthropic model="${cleanModel}"`);
-    return new ChatAnthropic({ apiKey: settings.apiKey, model: cleanModel, maxTokens });
+    return new ChatAnthropic({
+      apiKey: settings.apiKey,
+      model: cleanModel,
+      maxTokens,
+      thinking: { type: 'disabled' },
+    });
   }
+  // openai / litellm
   const defaultOpenAI = /^https?:\/\/api\.openai\.com\/?$/i.test(settings.baseUrl || '');
   const baseUrl = (settings.baseUrl || '').replace(/\/$/, '');
   const configuration = defaultOpenAI || !baseUrl
@@ -141,6 +147,7 @@ function buildChatModel(settings, tools, maxTokens = 8192) {
       apiKey: settings.apiKey,
       model: cleanModel,
       maxTokens,
+      thinking: { type: 'disabled' },
     });
     return model.bindTools(tools, { tool_choice: { type: 'any' } });
   }

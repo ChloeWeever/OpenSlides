@@ -43,6 +43,7 @@ async function callLLM(messages, settings, maxTokens = 4096, signal) {
     const body = {
       model: modelName || 'claude-3-5-sonnet-20241022',
       max_tokens: maxTokens,
+      thinking: { type: 'disabled' },
       messages: userMessages,
       ...(systemMsg ? { system: systemMsg.content } : {}),
     };
