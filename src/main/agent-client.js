@@ -115,7 +115,7 @@ function buildPlainModel(settings, maxTokens = 8192) {
     const cleanModel = (settings.modelName || 'claude-3-5-sonnet-20241022').replace(/^anthropic[-/]+/i, '');
     log.info(`buildPlainModel: anthropic model="${cleanModel}"`);
     return new ChatAnthropic({
-      apiKey: settings.apiKey,
+      anthropicApiKey: settings.apiKey,
       model: cleanModel,
       maxTokens,
       thinking: { type: 'disabled' },
@@ -145,10 +145,11 @@ function buildChatModel(settings, tools, maxTokens = 8192) {
     const cleanModel = rawModel.replace(/^anthropic[-/]+/i, '');
     log.info(`buildChatModel: anthropic model="${cleanModel}" (raw="${rawModel}")`);
     const model = new ChatAnthropic({
-      apiKey: settings.apiKey,
+      anthropicApiKey: settings.apiKey,
       model: cleanModel,
       maxTokens,
       thinking: { type: 'disabled' },
+      streaming: true,
     });
     return model.bindTools(tools, { tool_choice: { type: 'any' } });
   }
