@@ -72,6 +72,8 @@ const STRINGS = {
     genFailed:           'Generation failed, please retry',
     genDoneWithErrors:   '✓ {0} slides generated, {1} failed',
     genDoneAll:          '✓ All {0} slides generated!',
+    genAborted:          '⏹ Generation stopped ({0} slides kept)',
+    stopGeneration:      'Stop',
 
     // preview panel toolbar
     prevSlide:           'Previous slide',
@@ -186,6 +188,8 @@ const STRINGS = {
     genFailed:           '生成失败，请重试',
     genDoneWithErrors:   '✓ {0} 页已生成，其中 {1} 页生成失败',
     genDoneAll:          '✓ 全部 {0} 页幻灯片已生成完成！',
+    genAborted:          '⏹ 已停止（已保留 {0} 页）',
+    stopGeneration:      '停止',
 
     // preview panel toolbar
     prevSlide:           '上一张',

@@ -1,17 +1,5 @@
 // chat-panel.js — right pane: AI conversation interface
 
-// Keywords that signal a "generate full presentation" intent
-function isPresentationRequest(text) {
-  const lower = text.toLowerCase();
-  return (
-    (lower.includes('ppt') || lower.includes('presentation') || lower.includes('幻灯片') ||
-     lower.includes('slides') || lower.includes('slideshow') || lower.includes('slide deck') ||
-     lower.includes('生成') || lower.includes('创建') || lower.includes('制作')) &&
-    (lower.includes('ppt') || lower.includes('presentation') || lower.includes('幻灯片') ||
-     lower.includes('slides') || lower.length > 120)
-  );
-}
-
 function ThinkingIndicator() {
   return (
     <div className="flex items-center gap-1.5 px-4 py-3 msg-assistant rounded-xl w-fit">
@@ -33,21 +21,32 @@ function Message({ msg }) {
   );
 }
 
-function GenerationProgress({ outline, currentStep, done, error }) {
+function GenerationProgress({ outline, currentStep, done, error, onStop }) {
   if (!outline) return null;
   const [collapsed, setCollapsed] = React.useState(false);
   return (
     <div className="mx-4 mb-3 rounded-xl overflow-hidden" style={{background:'var(--ui-bg-4)',border:'1px solid var(--ui-border)'}}>
-      <div className="px-3 py-2 flex items-center gap-2 cursor-pointer select-none"
-        style={{borderBottom: collapsed ? 'none' : '1px solid var(--ui-border)'}}
-        onClick={() => setCollapsed(c => !c)}>
-        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${done ? 'bg-[#a6e3a1]' : 'animate-pulse'}`}
-          style={!done ? {background:'var(--ui-primary)'} : {}} />
-        <span className="text-xs font-medium ui-text-2 flex-1">
+      <div className="px-3 py-2 flex items-center gap-2 select-none"
+        style={{borderBottom: collapsed ? 'none' : '1px solid var(--ui-border)'}}>
+        <div className={`w-2 h-2 rounded-full flex-shrink-0 cursor-pointer ${done ? 'bg-[#a6e3a1]' : 'animate-pulse'}`}
+          style={!done ? {background:'var(--ui-primary)'} : {}}
+          onClick={() => setCollapsed(c => !c)} />
+        <span className="text-xs font-medium ui-text-2 flex-1 cursor-pointer" onClick={() => setCollapsed(c => !c)}>
           {done ? t('genComplete') : t('genSlide', currentStep, outline.length)}
         </span>
-        {error && <span className="text-xs text-[#f38ba8] truncate max-w-[40%]">{error}</span>}
-        <span className="text-[10px] ui-text-4 flex-shrink-0 ml-1">{collapsed ? '▸' : '▾'}</span>
+        {error && <span className="text-xs text-[#f38ba8] truncate max-w-[30%]">{error}</span>}
+        {!done && onStop && (
+          <button
+            onClick={onStop}
+            className="flex-shrink-0 px-2 py-0.5 rounded text-[11px] font-medium transition-colors"
+            style={{background:'rgba(243,139,168,0.15)',color:'#f38ba8',border:'1px solid rgba(243,139,168,0.4)'}}
+            onMouseEnter={e => e.currentTarget.style.background='rgba(243,139,168,0.28)'}
+            onMouseLeave={e => e.currentTarget.style.background='rgba(243,139,168,0.15)'}
+          >
+            {t('stopGeneration')}
+          </button>
+        )}
+        <span className="text-[10px] ui-text-4 flex-shrink-0 ml-1 cursor-pointer" onClick={() => setCollapsed(c => !c)}>{collapsed ? '▸' : '▾'}</span>
       </div>
       {!collapsed && (
         <>
@@ -109,6 +108,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
   const [genMode, setGenMode] = React.useState('template'); // 'template' | 'solo'
   const endRef = React.useRef(null);
   const textareaRef = React.useRef(null);
+  const abortRef = React.useRef(false);
 
   const quickPrompts = [
     t('quickPrompt1'), t('quickPrompt2'), t('quickPrompt3'),
@@ -152,6 +152,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
     setGenDone(false);
     setGenError('');
     setError('');
+    abortRef.current = false;
 
     const userMsg = { role: 'user', content: text };
     setMessages((prev) => [...prev, userMsg]);
@@ -181,6 +182,11 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
       let errorCount = 0;
 
       for (let i = 0; i < outline.length; i++) {
+        if (abortRef.current) {
+          setGenDone(true);
+          setMessages((prev) => [...prev, { role: 'assistant', content: t('genAborted', allSlides.length) }]);
+          return;
+        }
         setGenStep(i + 1);
         const s = outline[i];
         const slideResult = await window.openslides.genSlide(
@@ -230,6 +236,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
     setGenDone(false);
     setGenError('');
     setError('');
+    abortRef.current = false;
 
     setMessages((prev) => [...prev, { role: 'user', content: text }]);
     setInput('');
@@ -259,6 +266,11 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
       let errorCount = 0;
 
       for (let i = 0; i < outline.length; i++) {
+        if (abortRef.current) {
+          setGenDone(true);
+          setMessages((prev) => [...prev, { role: 'assistant', content: t('genAborted', allSlides.length) }]);
+          return;
+        }
         setGenStep(i + 1);
         const s = outline[i];
         const slideResult = await window.openslides.genSoloSlide(
@@ -309,12 +321,6 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
   const sendMessage = React.useCallback(async (text) => {
     if (!text.trim() || thinking) return;
 
-    if (isPresentationRequest(text) && window.openslides?.genOutline) {
-      return genMode === 'solo'
-        ? generateSoloPresentation(text)
-        : generatePresentation(text);
-    }
-
     setError('');
     const userMsg = { role: 'user', content: text };
     const context = buildContext();
@@ -329,6 +335,14 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
       const result = await window.openslides.sendChat(history, settings);
 
       if (!result.success) throw new Error(result.error);
+
+      if (result.data?.action === 'generate_presentation') {
+        setThinking(false);
+        const req = result.data.request || text;
+        return genMode === 'solo'
+          ? generateSoloPresentation(req)
+          : generatePresentation(req);
+      }
 
       if (result.data) {
         onApplyAction(result.data);
@@ -394,7 +408,13 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
 
       {/* Generation progress */}
       {genOutline && (
-        <GenerationProgress outline={genOutline} currentStep={genStep} done={genDone} error={genError} />
+        <GenerationProgress
+          outline={genOutline}
+          currentStep={genStep}
+          done={genDone}
+          error={genError}
+          onStop={() => { abortRef.current = true; }}
+        />
       )}
 
       {/* Mode toggle */}

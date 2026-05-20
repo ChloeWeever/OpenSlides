@@ -56,6 +56,7 @@ Respond ONLY with valid JSON in one of these formats:
    - For Solo slides (soloHtml present): {"action":"update_slide","slideId":"<id>","slide":{"soloHtml":"<complete updated html>"}}
 4. Delete a slide:    {"action":"delete_slide","slideId":"<id>"}
 5. Chat only:         {"action":"message","message":"<text>"}
+6. Generate full deck:{"action":"generate_presentation","request":"<user's original request text>"}
 
 ## Slide schema
 {
@@ -115,7 +116,11 @@ Prefer cards for feature lists, stats for KPI dashboards, pills for tags/tech st
 Use the "section" layout with sectionNum for chapter dividers in long presentations.
 For diagrams: use bar/line/pie for data visualization, flow for process/architecture, mindmap for concept maps.
 When the user asks for a chart, graph, flowchart, architecture diagram, or mind map — use the diagram element.
-Use kind:"svg" only as a last resort when none of the built-in kinds fit.`;
+Use kind:"svg" only as a last resort when none of the built-in kinds fit.
+
+## When to use generate_presentation
+Use {"action":"generate_presentation","request":"..."} when the user wants to create a NEW multi-slide presentation from scratch (e.g. "create a presentation about X", "make me a 10-slide deck on Y", "生成一个关于X的PPT").
+Do NOT use it for editing, updating, or adding to existing slides — use replace_all / add_slides / update_slide instead.`;
 
 // Outline-only prompt: returns a minimal slide list with id/layout/title/notes
 const OUTLINE_PROMPT = `You are a presentation planning assistant. Given the user's request, output a minimal slide outline as JSON.
