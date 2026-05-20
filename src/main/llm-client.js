@@ -55,7 +55,9 @@ async function callLLM(messages, settings, maxTokens = 4096, signal) {
       },
     }, body, signal);
     if (res.status !== 200) throw new Error(`Anthropic API error ${res.status}: ${JSON.stringify(res.body)}`);
-    return res.body.content?.[0]?.text ?? '';
+    const contentBlocks = res.body.content ?? [];
+    const textBlock = contentBlocks.find(b => b.type === 'text') ?? contentBlocks[0];
+    return textBlock?.text ?? '';
   } else {
     const body = {
       model: modelName || 'gpt-4o',
