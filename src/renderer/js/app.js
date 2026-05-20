@@ -262,13 +262,6 @@ function App() {
           {t('settings')}
         </button>
         <button
-          onClick={() => setLogoOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors"
-          title={t('brandLogo')}
-        >
-          🖼
-        </button>
-        <button
           onClick={toggleTheme}
           title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
           className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors"
@@ -311,6 +304,7 @@ function App() {
             onRegisterPreview={(fn) => { previewSlideRef.current = fn; }}
             lang={lang}
             logo={logo}
+            onOpenLogo={() => setLogoOpen(true)}
           />
         </div>
         <div className="flex-[2] min-w-0 overflow-hidden" style={{ minWidth: 320, maxWidth: 480 }}>

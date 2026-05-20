@@ -531,7 +531,7 @@ function ImageTray({ slide, onApplyAction }) {
 }
 
 // ── PreviewPanel ──────────────────────────────────────────────────────────────
-function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, onPrev, onGoTo, onReorder, onApplyAction, onSave, onElementSelected, canUndo, canRedo, onUndo, onRedo, showEditor, onOpenEditor, onCloseEditor, onRegisterPreview, lang, logo }) {
+function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, onPrev, onGoTo, onReorder, onApplyAction, onSave, onElementSelected, canUndo, canRedo, onUndo, onRedo, showEditor, onOpenEditor, onCloseEditor, onRegisterPreview, lang, logo, onOpenLogo }) {
   const iframeRef = React.useRef(null);
   const viewportContainerRef = React.useRef(null);
   const [viewportSize, setViewportSize] = React.useState({ width: 0, height: 0 });
@@ -722,6 +722,12 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
             </div>
           )}
         </div>
+
+        {/* Brand logo */}
+        <button onClick={onOpenLogo} title={t('brandLogo')}
+          className={toolBtn(false)} style={{borderWidth:1,borderStyle:'solid',borderColor:'var(--ui-border)'}}>
+          🖼
+        </button>
 
         {/* Theme picker */}
         <div ref={themePickerRef} className="relative">
