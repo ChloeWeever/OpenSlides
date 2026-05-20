@@ -148,8 +148,8 @@ function BrandLogoModal({ open, onClose, onSave }) {
               style={{background: form.enabled ? 'var(--ui-primary)' : 'var(--ui-bg-5,#4a4a5a)'}}
             >
               <span
-                className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
-                style={{transform: form.enabled ? 'translateX(22px)' : 'translateX(2px)'}}
+                className="absolute w-4 h-4 rounded-full bg-white transition-transform"
+                style={{top:'2px', left:'2px', transform: form.enabled ? 'translateX(18px)' : 'translateX(0)'}}
               />
             </button>
           </div>

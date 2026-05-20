@@ -14,7 +14,6 @@ contextBridge.exposeInMainWorld('openslides', {
   saveSession: (session) => ipcRenderer.invoke('sessions:save', session),
   deleteSession: (id) => ipcRenderer.invoke('sessions:delete', id),
   exportHtml: (data) => ipcRenderer.invoke('export:html', data),
-  exportPdf: (data) => ipcRenderer.invoke('export:pdf', data),
   pickImage: () => ipcRenderer.invoke('image:pick'),
   getLogo: () => ipcRenderer.invoke('logo:get'),
   saveLogo: (logo) => ipcRenderer.invoke('logo:save', logo),

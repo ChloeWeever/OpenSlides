@@ -1,4 +1,4 @@
-const { ipcMain, dialog, BrowserWindow } = require('electron');
+const { ipcMain, dialog, BrowserWindow, app, shell } = require('electron');
 const store = require('./store');
 const { callLLM, parseJSONResponse } = require('./llm-client');
 const { genSlideWithAgent, genSoloSlideWithAgent } = require('./agent-client');
@@ -418,9 +418,8 @@ function renderElements(elements, layout, sectionNum) {
   return sectionNumHtml + (elements||[]).map(renderEl).join('');
 }
 
-// Shared CSS for HTML/PDF export — uses CSS variables so themes are respected
+const FONT_IMPORT = `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap"/>`;
 const SLIDE_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
   --accent:#89b4fa;--accent-2:#cba6f7;--accent-3:#f38ba8;
@@ -491,6 +490,7 @@ body{font-family:'Inter','Noto Sans SC',system-ui,sans-serif;-webkit-font-smooth
 
 
 
+
 function themeVarsStyle(tv) {
   if (!tv) return '';
   return [
@@ -542,6 +542,7 @@ function buildStandaloneHTML(slides, title, logo) {
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>${escHtml(title||'Presentation')}</title>
+${FONT_IMPORT}
 <style>
 ${SLIDE_CSS}
 html,body{width:100%;height:100%;overflow:hidden;background:#000;}
@@ -638,120 +639,4 @@ ipcMain.handle('export:html', async (_event, { slides, title }) => {
   }
 });
 
-ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
-  const win = BrowserWindow.getFocusedWindow();
-  const { filePath, canceled } = await dialog.showSaveDialog(win, {
-    title: 'Export as PDF',
-    defaultPath: `${title||'presentation'}.pdf`,
-    filters: [{ name: 'PDF File', extensions: ['pdf'] }],
-  });
-  if (canceled || !filePath) return { success: false };
 
-  const W = 1920, H = 1080;
-  const tmpHtml = path.join(os.tmpdir(), `openslides-pdf-${Date.now()}.html`);
-
-  const offscreen = new BrowserWindow({
-    width: W, height: H * slides.length,
-    x: -W - 100, y: 0,
-    frame: false, skipTaskbar: true,
-    webPreferences: { contextIsolation: true, javascript: true },
-  });
-  offscreen.showInactive();
-
-  try {
-    const html = buildPrintableHTML(slides, W, H);
-    fs.writeFileSync(tmpHtml, html, 'utf8');
-
-    await new Promise((resolve, reject) => {
-      let settled = false;
-      const onConsole = (_e, _level, msg) => {
-        if (msg === '__ready__' && !settled) { settled = true; cleanup(); resolve(); }
-      };
-      const onLoad = () => {
-        if (!settled) setTimeout(() => { if (!settled) { settled = true; cleanup(); resolve(); } }, 500);
-      };
-      const onFail = (_, code, desc) => { cleanup(); reject(new Error(desc || 'load failed')); };
-      function cleanup() {
-        offscreen.webContents.removeListener('console-message', onConsole);
-        offscreen.webContents.removeListener('did-finish-load', onLoad);
-        offscreen.webContents.removeListener('did-fail-load', onFail);
-      }
-      offscreen.webContents.on('console-message', onConsole);
-      offscreen.webContents.once('did-finish-load', onLoad);
-      offscreen.webContents.once('did-fail-load', onFail);
-      offscreen.loadFile(tmpHtml);
-    });
-
-    // Extra tick so background/font rendering finishes
-    await offscreen.webContents.executeJavaScript(
-      'new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); })'
-    );
-
-    // pageSize in microns: px ÷ 96 × 25.4 × 1000
-    const pdfBuf = await offscreen.webContents.printToPDF({
-      printBackground: true,
-      pageSize: { width: Math.round(W / 96 * 25.4 * 1000), height: Math.round(H / 96 * 25.4 * 1000) },
-      margins: { marginType: 'none' },
-    });
-    fs.writeFileSync(filePath, pdfBuf);
-    return { success: true, filePath };
-  } catch (err) {
-    return { success: false, error: err.message };
-  } finally {
-    offscreen.destroy();
-    try { fs.unlinkSync(tmpHtml); } catch (_) {}
-  }
-});
-
-// Vertical printable HTML — one .slide-page div per slide, each exactly W×H px.
-// Solo slides embed their HTML via an inline <iframe> sized to the page.
-// @page removes all margins so printToPDF outputs clean slides.
-function buildPrintableHTML(slides, w, h) {
-  const logo = store.get('logo', null);
-  const pages = slides.map((s) => {
-    if (s.soloHtml) {
-      const escaped = s.soloHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-      return `<div class="slide-page">`
-        + `<iframe srcdoc="${escaped}" style="width:${w}px;height:${h}px;border:none;display:block;" sandbox="allow-scripts allow-same-origin"></iframe>`
-        + `</div>`;
-    }
-    const bg = s.background || '#1e1e2e';
-    const color = s.color || '#cdd6f4';
-    const layout = s.layout || 'content';
-    const inner = renderElements(s.elements, layout, s.sectionNum);
-    const tv = themeVarsStyle(s.themeVars);
-    const style = `background:${bg};color:${color}${tv ? ';'+tv : ''}`;
-    const logoHtml = (logo?.enabled && logo?.dataUrl) ? buildLogoHtml(logo) : '';
-    return `<div class="slide-page">`
-      + `<div class="slide-container layout-${layout}" style="${style}">${inner}${logoHtml}</div>`
-      + `</div>`;
-  }).join('\n');
-
-  const diagScript = _diagramRendererJS
-    ? `<script>${_diagramRendererJS}\n${DIAGRAM_INIT_JS}</script>`
-    : `<script>console.log('__ready__');</script>`;
-
-  return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"/>
-<style>
-@page { size: ${(w / 96 * 25.4).toFixed(4)}mm ${(h / 96 * 25.4).toFixed(4)}mm; margin: 0; }
-*, *::before, *::after { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; width: ${w}px; background: #000; }
-${SLIDE_CSS}
-.slide-page {
-  width: ${w}px;
-  height: ${h}px;
-  position: relative;
-  overflow: hidden;
-  page-break-after: always;
-  break-after: page;
-}
-.slide-page .slide-container { position: absolute; inset: 0; }
-</style></head>
-<body>
-${pages}
-${_chartJS ? `<script>${_chartJS}</script>` : ''}
-${diagScript}
-</body>
-</html>`;
-}

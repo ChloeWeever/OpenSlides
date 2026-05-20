@@ -726,7 +726,7 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
         {/* Brand logo */}
         <button onClick={onOpenLogo} title={t('brandLogo')}
           className={toolBtn(false)} style={{borderWidth:1,borderStyle:'solid',borderColor:'var(--ui-border)'}}>
-          🖼
+          {t('logo')}
         </button>
 
         {/* Theme picker */}

@@ -39,7 +39,6 @@ const STRINGS = {
     // export modal
     exportPresentation:  'Export Presentation',
     exportHtmlDesc:      'Self-contained file, works in any browser',
-    exportPdfDesc:       '16:9 pages, print-ready, 1920×1080 px',
     exporting:           '…',
     close:               'Close',
     savedTo:             '✓ Saved to: {0}',
@@ -94,7 +93,8 @@ const STRINGS = {
     exitPresent:         'Exit (Esc)',
 
     // brand logo modal
-    brandLogo:           '🖼 Brand Logo',
+    logo:                'Logo',
+    brandLogo:           'Brand Logo',
     brandLogoDesc:       'Add a logo overlay to every template slide',
     logoImage:           'Logo Image',
     uploadLogo:          'Upload Image',
@@ -153,7 +153,6 @@ const STRINGS = {
     // export modal
     exportPresentation:  '导出演示文稿',
     exportHtmlDesc:      '自包含文件，可在任意浏览器中打开',
-    exportPdfDesc:       '16:9 页面，适合打印，1920×1080 px',
     exporting:           '…',
     close:               '关闭',
     savedTo:             '✓ 已保存至：{0}',
@@ -208,7 +207,8 @@ const STRINGS = {
     exitPresent:         '退出 (Esc)',
 
     // brand logo modal
-    brandLogo:           '🖼 品牌 Logo',
+    logo:                'Logo',
+    brandLogo:           '品牌 Logo',
     brandLogoDesc:       '为每张模板幻灯片添加 Logo 水印',
     logoImage:           'Logo 图片',
     uploadLogo:          '上传图片',
