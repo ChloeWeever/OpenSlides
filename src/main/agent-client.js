@@ -1,9 +1,10 @@
-// agent-client.js — LangGraph ReAct agent for gen-slide and solo-slide
+// agent-client.js — LangGraph ReAct agent for gen-slide; direct HTTP for solo-slide
 
 const { ChatOpenAI } = require('@langchain/openai');
 const { ChatAnthropic } = require('@langchain/anthropic');
 const { tool } = require('@langchain/core/tools');
 const { z } = require('zod');
+const { callLLM } = require('./llm-client');
 
 // ── Prompt constants (mirrors ipc-handlers.js) ────────────────────────────────
 
@@ -289,48 +290,21 @@ This is slide ${slideIndex + 1} of ${totalSlides}
 
 Output the complete HTML document now.`;
 
-  // Solo HTML is plain text output — no tool binding needed (avoids LiteLLM large-arg issues)
-  // Each call is a fresh 2-message session (system + user) — no context accumulation between slides.
-  const llm = buildPlainModel(settings, 32000);
   const systemSize = SOLO_SLIDE_SYSTEM.length;
   const promptSize = userPrompt.length;
   log.info(`  prompt sizes: system=${systemSize} chars, user=${promptSize} chars (~${Math.round((systemSize + promptSize) / 4)} tokens est.)`);
   log.info(`  calling model...`);
 
-  let response;
+  let html;
   try {
-    response = await llm.invoke([
+    html = await callLLM([
       { role: 'system', content: SOLO_SLIDE_SYSTEM },
       { role: 'user', content: userPrompt },
-    ], { signal });
+    ], settings, 32000, signal);
   } catch (err) {
     log.error(`✗ genSoloSlide ${label} — model invoke failed (${Date.now() - t0}ms):`, err.message);
     throw err;
   }
-
-  log.info(`  response type=${response._getType?.() ?? typeof response}, content size=${typeof response.content === 'string' ? response.content.length : JSON.stringify(response.content).length}`);
-
-  // Log stop reason so we can detect max_tokens truncation
-  const stopReason = response.response_metadata?.stop_reason
-    ?? response.response_metadata?.finish_reason
-    ?? response.additional_kwargs?.finish_reason
-    ?? '(unknown)';
-  log.info(`  stop_reason: ${stopReason}`);
-  if (stopReason === 'max_tokens' || stopReason === 'length') {
-    log.warn(`  WARNING: output was truncated by max_tokens limit — increase maxTokens`);
-  }
-
-  let html = typeof response.content === 'string'
-    ? response.content
-    : Array.isArray(response.content)
-      ? response.content
-          .filter(b => typeof b === 'string' || b.type === 'text')
-          .map(b => (typeof b === 'string' ? b : b.text ?? ''))
-          .join('')
-      : String(response.content ?? '');
-
-  // Strip think/thinking tags from models that embed reasoning in the output
-  html = html.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
 
   // Strip markdown fences if model wrapped the HTML
   html = html.replace(/^```(?:html)?\s*/i, '').replace(/```\s*$/, '').trim();
