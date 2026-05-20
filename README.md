@@ -19,9 +19,9 @@
 
 ![](example/1.png)
 
-**Live demo:** [Introduce OpenSlides — Solo mode · SAP design style](https://chloeweever.github.io/OpenSlides/example/Introduce-OpenSlides.html)
+**Live demo:** [Introduce OpenSlides — Built by Solo mode · SAP design style](https://chloeweever.github.io/OpenSlides/example/Introduce-OpenSlides.html)
 
-**Live demo:** [History of AI — Template mode](https://chloeweever.github.io/OpenSlides/example/History-of-AI.html)
+**Live demo:** [History of AI — Built by Template mode](https://chloeweever.github.io/OpenSlides/example/History-of-AI.html)
 
 - **AI generation** — describe your presentation in natural language; the AI generates a full deck slide by slide
 - **Two generation modes**
