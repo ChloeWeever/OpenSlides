@@ -21,7 +21,7 @@ function Message({ msg }) {
   );
 }
 
-function GenerationProgress({ outline, currentStep, done, error, onStop }) {
+function GenerationProgress({ outline, currentStep, done, error }) {
   if (!outline) return null;
   const [collapsed, setCollapsed] = React.useState(false);
   return (
@@ -34,18 +34,7 @@ function GenerationProgress({ outline, currentStep, done, error, onStop }) {
         <span className="text-xs font-medium ui-text-2 flex-1 cursor-pointer" onClick={() => setCollapsed(c => !c)}>
           {done ? t('genComplete') : t('genSlide', currentStep, outline.length)}
         </span>
-        {error && <span className="text-xs text-[#f38ba8] truncate max-w-[30%]">{error}</span>}
-        {!done && onStop && (
-          <button
-            onClick={onStop}
-            className="flex-shrink-0 px-2 py-0.5 rounded text-[11px] font-medium transition-colors"
-            style={{background:'rgba(243,139,168,0.15)',color:'#f38ba8',border:'1px solid rgba(243,139,168,0.4)'}}
-            onMouseEnter={e => e.currentTarget.style.background='rgba(243,139,168,0.28)'}
-            onMouseLeave={e => e.currentTarget.style.background='rgba(243,139,168,0.15)'}
-          >
-            {t('stopGeneration')}
-          </button>
-        )}
+        {error && <span className="text-xs text-[#f38ba8] truncate max-w-[40%]">{error}</span>}
         <span className="text-[10px] ui-text-4 flex-shrink-0 ml-1 cursor-pointer" onClick={() => setCollapsed(c => !c)}>{collapsed ? '▸' : '▾'}</span>
       </div>
       {!collapsed && (
@@ -384,8 +373,9 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
           <span className="text-xs ui-text-3">{settings?.modelName || t('noModelSet')}</span>
           <button
             onClick={onNewSession}
+            disabled={!!(genOutline && !genDone)}
             title={t('newSession')}
-            className="w-6 h-6 rounded flex items-center justify-center ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors text-xs"
+            className="w-6 h-6 rounded flex items-center justify-center ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors text-xs disabled:opacity-30 disabled:cursor-not-allowed"
           >
             ✎
           </button>
@@ -417,7 +407,6 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
           currentStep={genStep}
           done={genDone}
           error={genError}
-          onStop={() => { abortRef.current = true; }}
         />
       )}
 
@@ -502,16 +491,28 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
           />
           <div className="absolute bottom-2 right-2 flex items-center gap-2">
             <span className="text-xs ui-text-4">{t('sendHelp')}</span>
-            <button
-              onClick={() => sendMessage(input)}
-              disabled={!input.trim() || thinking || isGenerating}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-40 transition-all"
-              style={{background:'var(--ui-primary)'}}
-              onMouseEnter={e => { if (!e.currentTarget.disabled) e.currentTarget.style.background='var(--ui-primary-h)'; }}
-              onMouseLeave={e => e.currentTarget.style.background='var(--ui-primary)'}
-            >
-              {thinking ? '…' : isGenerating ? t('generating') : t('send')}
-            </button>
+            {isGenerating ? (
+              <button
+                onClick={() => { abortRef.current = true; }}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                style={{background:'rgba(243,139,168,0.15)',color:'#f38ba8',border:'1px solid rgba(243,139,168,0.4)'}}
+                onMouseEnter={e => e.currentTarget.style.background='rgba(243,139,168,0.28)'}
+                onMouseLeave={e => e.currentTarget.style.background='rgba(243,139,168,0.15)'}
+              >
+                {t('stopGeneration')}
+              </button>
+            ) : (
+              <button
+                onClick={() => sendMessage(input)}
+                disabled={!input.trim() || thinking}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-40 transition-all"
+                style={{background:'var(--ui-primary)'}}
+                onMouseEnter={e => { if (!e.currentTarget.disabled) e.currentTarget.style.background='var(--ui-primary-h)'; }}
+                onMouseLeave={e => e.currentTarget.style.background='var(--ui-primary)'}
+              >
+                {thinking ? '…' : t('send')}
+              </button>
+            )}
           </div>
         </div>
       </div>
