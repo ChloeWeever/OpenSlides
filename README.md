@@ -15,14 +15,17 @@
   <img src="https://img.shields.io/badge/react-18-61DAFB?logo=react" alt="React 18"/>
 </p>
 
-## Features
+## Live demos
 
-![](example/1.png)
+> generated with **claude-sonnet-4-6** in OpenSlides
 
-**Live demos** (generated with **claude-sonnet-4-6**):
 - [Introduce OpenSlides — Solo mode · SAP design style](https://chloeweever.github.io/OpenSlides/example/Introduce-OpenSlides.html)
 - [Introduce GitHub — Solo mode](https://chloeweever.github.io/OpenSlides/example/Introduce-Github.html)
 - [History of AI — Template mode](https://chloeweever.github.io/OpenSlides/example/History-of-AI.html)
+
+## Features
+
+![](example/1.png)
 
 - **AI generation** — describe your presentation in natural language; the AI generates a full deck slide by slide
 - **Two generation modes**
