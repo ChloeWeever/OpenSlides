@@ -30,6 +30,7 @@ function App() {
   const [exportOpen, setExportOpen] = React.useState(false);
   const [logoOpen, setLogoOpen] = React.useState(false);
   const [logo, setLogo] = React.useState(null);
+  const [helpOpen, setHelpOpen] = React.useState(false);
   const [settings, setSettings] = React.useState({
     apiProvider: 'openai',
     apiKey: '',
@@ -86,6 +87,7 @@ function App() {
         setActiveSessionId(s.id);
         persistSession(s, INIT_MESSAGES, slideManager.slides);
       }
+      if (!localStorage.getItem('openslides-onboarding-done')) setHelpOpen(true);
     });
   }, []);
 
@@ -252,6 +254,12 @@ function App() {
           <span className="text-xs text-amber-400 mr-3">{t('configureAI')}</span>
         )}
         <button
+          onClick={() => setHelpOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors"
+        >
+          {t('help')}
+        </button>
+        <button
           onClick={() => setExportOpen(true)}
           className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors"
         >
@@ -345,6 +353,7 @@ function App() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         onSave={handleSettingsSave}
+        onHelp={() => setHelpOpen(true)}
         lang={lang}
       />
       <ExportModal
@@ -358,6 +367,11 @@ function App() {
         open={logoOpen}
         onClose={() => setLogoOpen(false)}
         onSave={(l) => setLogo(l)}
+      />
+      <OnboardingModal
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        lang={lang}
       />
     </div>
   );

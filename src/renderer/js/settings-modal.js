@@ -1,6 +1,6 @@
 // settings-modal.js — AI configuration dialog
 
-function SettingsModal({ open, onClose, onSave, lang }) {
+function SettingsModal({ open, onClose, onSave, onHelp, lang }) {
   const [form, setForm] = React.useState({
     apiProvider: 'openai',
     apiKey: '',
@@ -123,6 +123,13 @@ function SettingsModal({ open, onClose, onSave, lang }) {
 
         {/* Footer */}
         <div className="flex gap-3 mt-6">
+          <button
+            onClick={() => { onClose(); onHelp?.(); }}
+            className="px-4 py-2 rounded-lg text-sm font-medium ui-bg-4 border ui-border ui-text-3 hover:ui-text hover:ui-border-2 transition-all"
+            style={{borderWidth:1,borderStyle:'solid'}}
+          >
+            {t('help')}
+          </button>
           <button
             onClick={onClose}
             className="flex-1 px-4 py-2 rounded-lg text-sm font-medium ui-bg-4 border ui-border ui-text-3 hover:ui-text hover:ui-border-2 transition-all"

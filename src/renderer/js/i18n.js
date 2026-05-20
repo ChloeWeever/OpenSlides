@@ -117,6 +117,19 @@ const STRINGS = {
     background:          'Background',
     elements:            'Elements',
     addElement:          'Add element',
+
+    // onboarding
+    help:                '? Help',
+    onboardingTitle:     'Welcome to OpenSlides',
+    onboardingSubtitle:  'AI-powered presentation editor — get started in 3 steps',
+    onboardingStep1Title:'1. Configure AI',
+    onboardingStep1Desc: 'Click ⚙ Settings in the top bar. Choose your LLM provider (OpenAI, Anthropic, or any OpenAI-compatible endpoint), enter your API key and model name.',
+    onboardingStep2Title:'2. Describe your presentation',
+    onboardingStep2Desc: 'Type what you want in the chat panel on the right. Choose Template mode for structured slides or Solo mode for free-form HTML/CSS design. The AI will generate a full deck slide by slide.',
+    onboardingStep3Title:'3. Edit and export',
+    onboardingStep3Desc: 'Click ✎ Edit on any slide to adjust layout, background, and elements. When ready, click ↑ Export to save a self-contained HTML file.',
+    onboardingDontShow:  "Don't show again",
+    onboardingClose:     'Get Started',
   },
 
   zh: {
@@ -233,6 +246,19 @@ const STRINGS = {
     background:          '背景色',
     elements:            '元素',
     addElement:          '添加元素',
+
+    // onboarding
+    help:                '? 帮助',
+    onboardingTitle:     '欢迎使用 OpenSlides',
+    onboardingSubtitle:  'AI 驱动的演示文稿编辑器 — 3 步快速上手',
+    onboardingStep1Title:'1. 配置 AI',
+    onboardingStep1Desc: '点击顶栏的 ⚙ 设置，选择 LLM 提供商（OpenAI、Anthropic 或任意兼容接口），填写 API Key 和模型名称。',
+    onboardingStep2Title:'2. 描述你的演示文稿',
+    onboardingStep2Desc: '在右侧聊天面板输入你的需求。选择 Template 模式生成结构化幻灯片，或选择 Solo 模式生成自由 HTML/CSS 风格的幻灯片，AI 将逐页生成完整的演示文稿。',
+    onboardingStep3Title:'3. 编辑并导出',
+    onboardingStep3Desc: '点击任意幻灯片上的 ✎ 编辑 调整布局、背景和元素。完成后点击 ↑ 导出，保存为可在任意浏览器中打开的独立 HTML 文件。',
+    onboardingDontShow:  '下次不再显示',
+    onboardingClose:     '开始使用',
   },
 };
 
