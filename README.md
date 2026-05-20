@@ -100,10 +100,17 @@ src/
 ## Building
 
 ```bash
+# Windows (NSIS installer + portable exe)
+npm run make:win
+
+# macOS (dmg + zip, x64 & arm64)
+npm run make:mac
+
+# Current platform
 npm run make
 ```
 
-Packaged output appears in `out/`.
+Packaged output appears in `dist/`.
 
 ## License
 
