@@ -21,6 +21,8 @@
 
 **Live demo:** [Introduce OpenSlides — Solo mode · SAP design style](https://chloeweever.github.io/OpenSlides/example/Introduce-OpenSlides.html)
 
+**Live demo:** [History of AI — Template mode](https://chloeweever.github.io/OpenSlides/example/History-of-AI.html)
+
 - **AI generation** — describe your presentation in natural language; the AI generates a full deck slide by slide
 - **Two generation modes**
   - **Template mode** — AI fills structured layouts (title, content, two-column, quote, etc.) with elements like headings, bullets, stats, cards, and diagrams
