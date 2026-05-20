@@ -33,6 +33,64 @@ function request(url, options, body, signal) {
   });
 }
 
+// Streaming request that collects SSE chunks and returns the full text
+function requestStream(url, options, body, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'));
+    const parsed = new URL(url);
+    const lib = parsed.protocol === 'https:' ? https : http;
+    const req = lib.request(
+      { hostname: parsed.hostname, port: parsed.port, path: parsed.pathname + parsed.search, ...options },
+      (res) => {
+        if (res.statusCode !== 200) {
+          let errData = '';
+          res.on('data', c => { errData += c; });
+          res.on('end', () => {
+            try { resolve({ status: res.statusCode, text: '', body: JSON.parse(errData) }); }
+            catch { resolve({ status: res.statusCode, text: '', body: errData }); }
+          });
+          return;
+        }
+        let text = '';
+        let buf = '';
+        res.on('data', (chunk) => {
+          buf += chunk.toString();
+          const lines = buf.split('\n');
+          buf = lines.pop(); // keep incomplete line
+          for (const line of lines) {
+            if (!line.startsWith('data:')) continue;
+            const data = line.slice(5).trim();
+            if (data === '[DONE]') continue;
+            try {
+              const evt = JSON.parse(data);
+              // Anthropic stream event
+              if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+                text += evt.delta.text;
+              }
+              // OpenAI stream event
+              const delta = evt.choices?.[0]?.delta?.content;
+              if (delta) text += delta;
+            } catch { /* ignore malformed chunks */ }
+          }
+        });
+        res.on('end', () => { resolve({ status: res.statusCode, text }); });
+      }
+    );
+    req.on('error', (err) => {
+      if (err.code === 'ECONNRESET' || err.message === 'socket hang up') {
+        reject(new DOMException('Aborted', 'AbortError'));
+      } else {
+        reject(err);
+      }
+    });
+    if (signal) {
+      signal.addEventListener('abort', () => { req.destroy(); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+    }
+    if (body) req.write(JSON.stringify(body));
+    req.end();
+  });
+}
+
 function stripThinkingTags(text) {
   return text.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
 }
@@ -48,10 +106,11 @@ async function callLLM(messages, settings, maxTokens = 4096, signal) {
       model: modelName || 'claude-3-5-sonnet-20241022',
       max_tokens: maxTokens,
       thinking: { type: 'disabled' },
+      stream: true,
       messages: userMessages,
       ...(systemMsg ? { system: systemMsg.content } : {}),
     };
-    const res = await request(`${base}/v1/messages`, {
+    const res = await requestStream(`${base}/v1/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -60,16 +119,15 @@ async function callLLM(messages, settings, maxTokens = 4096, signal) {
       },
     }, body, signal);
     if (res.status !== 200) throw new Error(`Anthropic API error ${res.status}: ${JSON.stringify(res.body)}`);
-    const contentBlocks = res.body.content ?? [];
-    const textBlock = contentBlocks.find(b => b.type === 'text') ?? contentBlocks[0];
-    return textBlock?.text ?? '';
+    return res.text ?? '';
   } else {
     const body = {
       model: modelName || 'gpt-4o',
       messages,
       max_tokens: maxTokens,
+      stream: true,
     };
-    const res = await request(`${base}/v1/chat/completions`, {
+    const res = await requestStream(`${base}/v1/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -77,7 +135,7 @@ async function callLLM(messages, settings, maxTokens = 4096, signal) {
       },
     }, body, signal);
     if (res.status !== 200) throw new Error(`LLM API error ${res.status}: ${JSON.stringify(res.body)}`);
-    return stripThinkingTags(res.body.choices?.[0]?.message?.content ?? '');
+    return stripThinkingTags(res.text ?? '');
   }
 }
 
