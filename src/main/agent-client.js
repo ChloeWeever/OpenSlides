@@ -113,7 +113,8 @@ function buildPlainModel(settings, maxTokens = 8192) {
   const provider = (settings.apiProvider || 'openai').toLowerCase();
   if (provider === 'anthropic') {
     const cleanModel = (settings.modelName || 'claude-3-5-sonnet-20241022').replace(/^anthropic[-/]+/i, '');
-    log.info(`buildPlainModel: anthropic model="${cleanModel}"`);
+    log.info(`buildPlainModel: anthropic model="${cleanModel}" apiKey="${settings.apiKey ? settings.apiKey.slice(0,8) + '…' : '(empty)'}"`);
+    process.env.ANTHROPIC_API_KEY = settings.apiKey;
     return new ChatAnthropic({
       anthropicApiKey: settings.apiKey,
       model: cleanModel,
@@ -144,7 +145,7 @@ function buildChatModel(settings, tools, maxTokens = 8192) {
     const rawModel = settings.modelName || 'claude-3-5-sonnet-20241022';
     const cleanModel = rawModel.replace(/^anthropic[-/]+/i, '');
     log.info(`buildChatModel: anthropic model="${cleanModel}" (raw="${rawModel}")`);
-    const model = new ChatAnthropic({
+    process.env.ANTHROPIC_API_KEY = settings.apiKey;
       anthropicApiKey: settings.apiKey,
       model: cleanModel,
       maxTokens,
