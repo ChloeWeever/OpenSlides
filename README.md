@@ -1,8 +1,19 @@
-# OpenSlides
+<p align="center">
+  <img src="src/assets/icon.png" width="96" alt="OpenSlides logo"/>
+</p>
 
-An AI-powered presentation editor built with Electron. Describe what you want and the AI generates beautiful slides — or edit them manually with the built-in slide editor.
+<h1 align="center">OpenSlides</h1>
 
-![OpenSlides screenshot](https://github.com/ChloeWeever/OpenSlides/raw/master/screenshot.png)
+<p align="center">
+  An AI-powered presentation editor built with Electron.<br/>
+  Describe what you want and the AI generates beautiful slides — or edit them manually with the built-in slide editor.
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"/></a>
+  <img src="https://img.shields.io/badge/electron-29-47848F?logo=electron" alt="Electron 29"/>
+  <img src="https://img.shields.io/badge/react-18-61DAFB?logo=react" alt="React 18"/>
+</p>
 
 ## Features
 
@@ -88,4 +99,4 @@ Packaged output appears in `out/`.
 
 ## License
 
-MIT
+MIT © [Chloe Weever](https://github.com/ChloeWeever) — see [LICENSE](LICENSE) for details.
