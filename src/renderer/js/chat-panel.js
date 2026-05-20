@@ -146,7 +146,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
     }
   };
 
-  const generatePresentation = React.useCallback(async (text) => {
+  const generatePresentation = React.useCallback(async (text, appendUserMsg = true) => {
     setThinking(true);
     setGenOutline(null);
     setGenDone(false);
@@ -154,9 +154,10 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
     setError('');
     abortRef.current = false;
 
-    const userMsg = { role: 'user', content: text };
-    setMessages((prev) => [...prev, userMsg]);
-    setInput('');
+    if (appendUserMsg) {
+      setMessages((prev) => [...prev, { role: 'user', content: text }]);
+      setInput('');
+    }
 
     try {
       setMessages((prev) => [...prev, { role: 'assistant', content: t('genStarting') }]);
@@ -230,7 +231,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
     }
   }, [settings, onApplyAction, setMessages]);
 
-  const generateSoloPresentation = React.useCallback(async (text) => {
+  const generateSoloPresentation = React.useCallback(async (text, appendUserMsg = true) => {
     setThinking(true);
     setGenOutline(null);
     setGenDone(false);
@@ -238,8 +239,10 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
     setError('');
     abortRef.current = false;
 
-    setMessages((prev) => [...prev, { role: 'user', content: text }]);
-    setInput('');
+    if (appendUserMsg) {
+      setMessages((prev) => [...prev, { role: 'user', content: text }]);
+      setInput('');
+    }
 
     try {
       setMessages((prev) => [...prev, { role: 'assistant', content: t('genStarting') }]);
@@ -332,7 +335,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
 
     try {
       const history = [...messages.slice(1).map((m) => ({ role: m.role, content: m.content })), contextMsg];
-      const result = await window.openslides.sendChat(history, settings);
+      const result = await window.openslides.sendChat(history, settings, genMode);
 
       if (!result.success) throw new Error(result.error);
 
@@ -340,8 +343,8 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
         setThinking(false);
         const req = result.data.request || text;
         return genMode === 'solo'
-          ? generateSoloPresentation(req)
-          : generatePresentation(req);
+          ? generateSoloPresentation(req, false)
+          : generatePresentation(req, false);
       }
 
       if (result.data) {

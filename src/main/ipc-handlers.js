@@ -228,9 +228,13 @@ ipcMain.handle('llm:solo-slide', async (_event, { outlineSlide, allOutline, user
   }
 });
 
-ipcMain.handle('llm:chat', async (_event, messages, settings) => {
+ipcMain.handle('llm:chat', async (_event, messages, settings, genMode) => {
   try {
-    const allMessages = [{ role: 'system', content: SYSTEM_PROMPT }, ...messages];
+    const modeHint = genMode === 'solo'
+      ? '\n\nCurrent mode: SOLO. If the user wants a new presentation, use {"action":"generate_presentation","request":"..."} — the system will generate free-form HTML slides.'
+      : '\n\nCurrent mode: TEMPLATE. If the user wants a new presentation, use {"action":"generate_presentation","request":"..."} — the system will generate structured template slides.';
+    const systemWithMode = { role: 'system', content: SYSTEM_PROMPT + modeHint };
+    const allMessages = [systemWithMode, ...messages];
     const rawText = await callLLM(allMessages, settings);
     const parsed = parseJSONResponse(rawText);
     // If still null but rawText looks like an update_slide with soloHtml, try harder
