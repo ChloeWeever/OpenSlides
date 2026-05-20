@@ -24,14 +24,14 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-    mainWindow.webContents.openDevTools();
+    if (!app.isPackaged) mainWindow.webContents.openDevTools();
   });
 
   // Fallback: show window even if ready-to-show never fires
   setTimeout(() => {
     if (!mainWindow.isVisible()) {
       mainWindow.show();
-      mainWindow.webContents.openDevTools();
+      if (!app.isPackaged) mainWindow.webContents.openDevTools();
     }
   }, 3000);
 }
