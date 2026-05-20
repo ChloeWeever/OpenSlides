@@ -17,9 +17,9 @@
 
 ## Features
 
-[![Solo mode demo — Introduce OpenSlides with SAP design style](example/1.png)](https://chloeweever.github.io/OpenSlides/example/Introduce-OpenSlides.html)
+![](example/1.png)
 
-<p align="center"><em>↑ Click to view live demo — Solo mode · SAP design style</em></p>
+**Live demo:** [Introduce OpenSlides — Solo mode · SAP design style](https://chloeweever.github.io/OpenSlides/example/Introduce-OpenSlides.html)
 
 - **AI generation** — describe your presentation in natural language; the AI generates a full deck slide by slide
 - **Two generation modes**
