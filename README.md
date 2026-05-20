@@ -1,3 +1,7 @@
+<p align="right">
+  <a href="README.zh.md">中文</a> | English
+</p>
+
 <p align="center">
   <img src="src/assets/icon.png" width="96" alt="OpenSlides logo"/>
 </p>
