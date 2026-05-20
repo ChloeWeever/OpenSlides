@@ -797,14 +797,6 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
 
         <div className="w-px h-5 mx-1" style={{background:'var(--ui-border)'}} />
 
-        {/* Save */}
-        <button onClick={onSave} title={t('save')}
-          className="w-8 h-8 rounded-lg flex items-center justify-center ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors text-sm">
-          ↓
-        </button>
-
-        <div className="w-px h-5 mx-1" style={{background:'var(--ui-border)'}} />
-
         {/* Undo / Redo */}
         <button onClick={onUndo} disabled={!canUndo} title={t('undo')}
           className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all text-sm ${canUndo ? 'ui-text-2 hover:ui-bg-5' : 'ui-text-4 cursor-not-allowed'}`}>
