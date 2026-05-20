@@ -2,8 +2,9 @@ const https = require('https');
 const http = require('http');
 const { URL } = require('url');
 
-function request(url, options, body) {
+function request(url, options, body, signal) {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'));
     const parsed = new URL(url);
     const lib = parsed.protocol === 'https:' ? https : http;
     const req = lib.request(
@@ -17,15 +18,23 @@ function request(url, options, body) {
         });
       }
     );
-    req.on('error', reject);
+    req.on('error', (err) => {
+      if (err.code === 'ECONNRESET' || err.message === 'socket hang up') {
+        reject(new DOMException('Aborted', 'AbortError'));
+      } else {
+        reject(err);
+      }
+    });
+    if (signal) {
+      signal.addEventListener('abort', () => { req.destroy(); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+    }
     if (body) req.write(JSON.stringify(body));
     req.end();
   });
 }
 
-async function callLLM(messages, settings, maxTokens = 4096) {
+async function callLLM(messages, settings, maxTokens = 4096, signal) {
   const { apiProvider, apiKey, baseUrl, modelName } = settings;
-  // Strip trailing /v1 so we can always append /v1/... ourselves
   const base = baseUrl.replace(/\/$/, '').replace(/\/v1$/, '');
 
   if (apiProvider === 'anthropic') {
@@ -44,11 +53,10 @@ async function callLLM(messages, settings, maxTokens = 4096) {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
-    }, body);
+    }, body, signal);
     if (res.status !== 200) throw new Error(`Anthropic API error ${res.status}: ${JSON.stringify(res.body)}`);
     return res.body.content?.[0]?.text ?? '';
   } else {
-    // OpenAI / LiteLLM
     const body = {
       model: modelName || 'gpt-4o',
       messages,
@@ -60,7 +68,7 @@ async function callLLM(messages, settings, maxTokens = 4096) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-    }, body);
+    }, body, signal);
     if (res.status !== 200) throw new Error(`LLM API error ${res.status}: ${JSON.stringify(res.body)}`);
     return res.body.choices?.[0]?.message?.content ?? '';
   }

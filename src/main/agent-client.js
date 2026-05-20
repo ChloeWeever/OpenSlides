@@ -166,9 +166,9 @@ function buildChatModel(settings, tools, maxTokens = 8192) {
 // For single-turn, single-tool calls we don't need a full agent graph.
 // We call the model once; it must return a tool_use block (forced by tool_choice).
 
-async function invokeWithTool(llm, messages, toolName, label, t0) {
+async function invokeWithTool(llm, messages, toolName, label, t0, signal) {
   log.info(`  invokeWithTool: calling model for "${toolName}"...`);
-  const response = await llm.invoke(messages);
+  const response = await llm.invoke(messages, { signal });
   log.info(`  invokeWithTool: response type=${response._getType?.() ?? typeof response}, tool_calls=${response.tool_calls?.length ?? 0}`);
 
   // Log raw additional_kwargs to see what LiteLLM actually returned
@@ -214,7 +214,7 @@ async function invokeWithTool(llm, messages, toolName, label, t0) {
 
 // ── Agent runners ─────────────────────────────────────────────────────────────
 
-async function genSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides }, settings) {
+async function genSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides }, settings, signal) {
   const label = `slide ${slideIndex + 1}/${totalSlides} [${outlineSlide.layout || 'content'}] "${outlineSlide.title}"`;
   log.info(`▶ genSlide ${label} — model: ${settings.modelName || 'gpt-4o'}`);
   const t0 = Date.now();
@@ -242,7 +242,7 @@ Call the generate_slide tool with the complete slide object.`;
 
   let args;
   try {
-    args = await invokeWithTool(llm, messages, 'generate_slide', label, t0);
+    args = await invokeWithTool(llm, messages, 'generate_slide', label, t0, signal);
   } catch (err) {
     log.error(`✗ genSlide ${label} — failed (${Date.now() - t0}ms):`, err.message);
     throw err;
@@ -258,7 +258,7 @@ Call the generate_slide tool with the complete slide object.`;
   return { success: true, data: { action: 'add_slides', slides: [slide] } };
 }
 
-async function genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme }, settings) {
+async function genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme }, settings, signal) {
   const label = `solo slide ${slideIndex + 1}/${totalSlides} "${outlineSlide.title}"`;
   log.info(`▶ genSoloSlide ${label} — model: ${settings.modelName || 'gpt-4o'}`);
   const t0 = Date.now();
@@ -293,7 +293,7 @@ Output the complete HTML document now.`;
     response = await llm.invoke([
       { role: 'system', content: SOLO_SLIDE_SYSTEM },
       { role: 'user', content: userPrompt },
-    ]);
+    ], { signal });
   } catch (err) {
     log.error(`✗ genSoloSlide ${label} — model invoke failed (${Date.now() - t0}ms):`, err.message);
     throw err;

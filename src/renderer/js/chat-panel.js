@@ -350,6 +350,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
         setMessages((prev) => [...prev, { role: 'assistant', content: result.raw || 'Done!' }]);
       }
     } catch (err) {
+      if (err.name === 'AbortError' || err.message === 'Aborted') return;
       setError(err.message);
       setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
     } finally {
@@ -496,7 +497,17 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
             <span className="text-xs ui-text-4">{t('sendHelp')}</span>
             {isGenerating ? (
               <button
-                onClick={() => { abortRef.current = true; }}
+                onClick={() => { abortRef.current = true; window.openslides.abortLLM?.(); }}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                style={{background:'rgba(243,139,168,0.15)',color:'#f38ba8',border:'1px solid rgba(243,139,168,0.4)'}}
+                onMouseEnter={e => e.currentTarget.style.background='rgba(243,139,168,0.28)'}
+                onMouseLeave={e => e.currentTarget.style.background='rgba(243,139,168,0.15)'}
+              >
+                {t('stopGeneration')}
+              </button>
+            ) : thinking ? (
+              <button
+                onClick={() => { window.openslides.abortLLM?.(); }}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
                 style={{background:'rgba(243,139,168,0.15)',color:'#f38ba8',border:'1px solid rgba(243,139,168,0.4)'}}
                 onMouseEnter={e => e.currentTarget.style.background='rgba(243,139,168,0.28)'}

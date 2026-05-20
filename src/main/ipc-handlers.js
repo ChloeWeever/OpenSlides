@@ -6,6 +6,15 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
+// Global abort controller — replaced on each new request, triggered by llm:abort
+let _abortController = new AbortController();
+function getSignal() { return _abortController.signal; }
+function resetAbort() { _abortController = new AbortController(); }
+
+ipcMain.handle('llm:abort', () => {
+  _abortController.abort();
+});
+
 // Load diagram renderer assets once at startup (used in HTML/PDF export)
 const SLIDE_FRAME_DIR = path.join(__dirname, '../renderer/slide-frame');
 let _chartJS = '';
@@ -141,12 +150,13 @@ Rules:
 - Aim for 6-12 slides unless the request clearly needs more or fewer`;
 
 ipcMain.handle('llm:outline', async (_event, userRequest, settings) => {
+  resetAbort();
   try {
     const messages = [
       { role: 'system', content: OUTLINE_PROMPT },
       { role: 'user', content: userRequest },
     ];
-    const rawText = await callLLM(messages, settings, 16000);
+    const rawText = await callLLM(messages, settings, 16000, getSignal());
     const parsed = parseJSONResponse(rawText);
     if (!parsed) return { success: false, error: `JSON解析失败，原始响应：${rawText.slice(0, 300)}` };
     const slides = parsed.slides || parsed;
@@ -161,7 +171,7 @@ ipcMain.handle('llm:outline', async (_event, userRequest, settings) => {
 
 ipcMain.handle('llm:gen-slide', async (_event, { outlineSlide, allOutline, userRequest, slideIndex, totalSlides }, settings) => {
   try {
-    return await genSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides }, settings);
+    return await genSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides }, settings, getSignal());
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -201,12 +211,13 @@ Rules:
 // solo-slide generation is handled by agent-client.js (LangGraph tool calling)
 
 ipcMain.handle('llm:solo-outline', async (_event, { text, settings }) => {
+  resetAbort();
   try {
     const messages = [
       { role: 'system', content: SOLO_OUTLINE_PROMPT },
       { role: 'user', content: text },
     ];
-    const rawText = await callLLM(messages, settings, 16000);
+    const rawText = await callLLM(messages, settings, 16000, getSignal());
     const parsed = parseJSONResponse(rawText);
     if (!parsed) return { success: false, error: `JSON parse failed: ${rawText.slice(0, 300)}` };
     const slides = parsed.slides || parsed;
@@ -222,20 +233,21 @@ ipcMain.handle('llm:solo-outline', async (_event, { text, settings }) => {
 
 ipcMain.handle('llm:solo-slide', async (_event, { outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme, settings }) => {
   try {
-    return await genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme }, settings);
+    return await genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme }, settings, getSignal());
   } catch (err) {
     return { success: false, error: err.message };
   }
 });
 
 ipcMain.handle('llm:chat', async (_event, messages, settings, genMode) => {
+  resetAbort();
   try {
     const modeHint = genMode === 'solo'
       ? '\n\nCurrent mode: SOLO. If the user wants a new presentation, use {"action":"generate_presentation","request":"..."} — the system will generate free-form HTML slides.'
       : '\n\nCurrent mode: TEMPLATE. If the user wants a new presentation, use {"action":"generate_presentation","request":"..."} — the system will generate structured template slides.';
     const systemWithMode = { role: 'system', content: SYSTEM_PROMPT + modeHint };
     const allMessages = [systemWithMode, ...messages];
-    const rawText = await callLLM(allMessages, settings);
+    const rawText = await callLLM(allMessages, settings, 4096, getSignal());
     const parsed = parseJSONResponse(rawText);
     // If still null but rawText looks like an update_slide with soloHtml, try harder
     if (!parsed && rawText.includes('soloHtml') && rawText.includes('update_slide')) {
