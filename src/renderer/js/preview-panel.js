@@ -536,6 +536,11 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
   const viewportContainerRef = React.useRef(null);
   const [viewportSize, setViewportSize] = React.useState({ width: 0, height: 0 });
   const [selectedTransition, setSelectedTransition] = React.useState(currentSlide?.transition || 'slide');
+
+  // Sync picker with the current slide's transition
+  React.useEffect(() => {
+    setSelectedTransition(currentSlide?.transition || 'slide');
+  }, [currentSlide?.id]);
   const [showTransitions, setShowTransitions] = React.useState(false);
   const [showThemes, setShowThemes] = React.useState(false);
   const [activeThemeId, setActiveThemeId] = React.useState('catppuccin');
@@ -754,7 +759,11 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
           {showTransitions && (
             <div className="absolute right-0 top-full mt-1 rounded-lg shadow-xl z-10 overflow-hidden" style={{background:'var(--ui-bg-4)',border:'1px solid var(--ui-border)'}}>
               {TRANSITIONS.map((tr) => (
-                <button key={tr} onClick={() => { setSelectedTransition(tr); setShowTransitions(false); }}
+                <button key={tr} onClick={() => {
+                    setSelectedTransition(tr);
+                    setShowTransitions(false);
+                    onApplyAction({ action: 'update_slide', slideId: currentSlide.id, slide: { transition: tr } });
+                  }}
                   className={`block w-full text-left px-4 py-2 text-sm transition-colors ${tr === selectedTransition ? 'ui-primary text-white' : 'ui-text-2'}`}
                   style={tr === selectedTransition ? {background:'var(--ui-primary)',color:'#fff'} : {}}
                   onMouseEnter={e => { if (tr !== selectedTransition) e.currentTarget.style.background='var(--ui-bg-5)'; }}
