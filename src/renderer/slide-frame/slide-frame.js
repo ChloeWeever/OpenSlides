@@ -26,8 +26,23 @@ function resolveThemeColors(container) {
   };
 }
 
-function renderSlide(container, slide) {
+function renderSlide(container, slide, logo) {
+  if (slide.soloHtml) {
+    container.className = 'slide-container';
+    container.style.cssText = 'padding:0;overflow:hidden;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;';
+    const cw = container.offsetWidth  || window.innerWidth;
+    const ch = container.offsetHeight || window.innerHeight;
+    const scale = Math.min(cw / 1920, ch / 1080);
+    const iframeEl = document.createElement('iframe');
+    iframeEl.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+    iframeEl.style.cssText = `width:1920px;height:1080px;border:none;display:block;flex-shrink:0;transform-origin:center center;transform:scale(${scale});`;
+    container.innerHTML = '';
+    container.appendChild(iframeEl);
+    iframeEl.srcdoc = slide.soloHtml;
+    return;
+  }
   container.className = `slide-container layout-${slide.layout || 'content'}`;
+  container.style.cssText = '';
   container.style.background = slide.background || '';
   container.style.color = slide.color || '';
   // Apply per-slide CSS variable overrides for accent/gradient theming
@@ -80,6 +95,26 @@ function renderSlide(container, slide) {
 
   // Re-apply selection highlight after re-render
   if (selectedIndex !== null) applyHighlight(selectedIndex);
+  renderLogo(container, logo);
+}
+
+function renderLogo(container, logo) {
+  const existing = container.querySelector('.slide-logo');
+  if (existing) existing.remove();
+  if (!logo?.enabled || !logo?.dataUrl) return;
+  const img = document.createElement('img');
+  img.className = 'slide-logo';
+  const pad = '16px';
+  const pos = logo.position || 'bottom-right';
+  img.style.cssText = [
+    'position:absolute', 'z-index:10', 'pointer-events:none',
+    `width:${logo.width || 80}px`,
+    `opacity:${logo.opacity ?? 1}`,
+    pos.includes('top')  ? `top:${pad}`    : `bottom:${pad}`,
+    pos.includes('left') ? `left:${pad}`   : `right:${pad}`,
+  ].join(';');
+  img.src = logo.dataUrl;
+  container.appendChild(img);
 }
 
 function esc(str) {
@@ -348,8 +383,13 @@ function renderChartJS(container, el) {
     container.innerHTML = '<div style="color:#f38ba8;font-size:13px;padding:16px">Chart.js not loaded</div>';
     return;
   }
+  const isPie = el.kind === 'pie' || el.kind === 'doughnut';
+  const W = isPie ? 400 : 640;
+  const H = isPie ? 360 : 340;
   const canvas = document.createElement('canvas');
-  canvas.style.cssText = 'max-width:100%;max-height:52vh;';
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.cssText = `width:${W}px;height:${H}px;max-width:100%;display:block;`;
   container.appendChild(canvas);
 
   const { text1, text2, accent } = themeColors;
@@ -359,7 +399,6 @@ function renderChartJS(container, el) {
 
   const datasets = (el.datasets || []).map((d, i) => {
     const color = d.color || CHART_PALETTE[i % CHART_PALETTE.length];
-    const isPie = el.kind === 'pie' || el.kind === 'doughnut';
     return {
       label: d.label || '',
       data: d.data || [],
@@ -372,13 +411,12 @@ function renderChartJS(container, el) {
     };
   });
 
-  const isPie = el.kind === 'pie' || el.kind === 'doughnut';
+  const isPie2 = el.kind === 'pie' || el.kind === 'doughnut';
   new Chart(canvas, {
     type: el.kind,
     data: { labels: el.labels || [], datasets },
     options: {
-      responsive: true,
-      maintainAspectRatio: true,
+      responsive: false,
       animation: { duration: 600 },
       plugins: {
         legend: {
@@ -388,7 +426,7 @@ function renderChartJS(container, el) {
           ? { display: true, text: el.title, color: text1, font: { size: 15, weight: '600' }, padding: { bottom: 12 } }
           : { display: false },
       },
-      scales: isPie ? {} : {
+      scales: isPie2 ? {} : {
         x: { ticks: { color: text2, font: { size: 12 } }, grid: { color: gridColor } },
         y: { ticks: { color: text2, font: { size: 12 } }, grid: { color: gridColor } },
       },
@@ -787,17 +825,17 @@ function getAnimClasses(transition, direction) {
 }
 
 window.addEventListener('message', (event) => {
-  const { type, slide, direction } = event.data || {};
+  const { type, slide, direction, logo } = event.data || {};
   if (type === 'render') {
     selectedIndex = null;
     notifySelection(null);
-    showSlideSimple(slide, direction);
+    showSlideSimple(slide, direction, logo);
   }
 });
 
 let animTimer = null;
 
-function showSlideSimple(slide, direction) {
+function showSlideSimple(slide, direction, logo) {
   // Cancel any in-flight animation immediately
   if (animTimer !== null) {
     clearTimeout(animTimer);
@@ -815,8 +853,8 @@ function showSlideSimple(slide, direction) {
   }
 
   // No transition: render directly into current
-  if (!currentSlide || !slide.transition || slide.transition === 'none' || direction === 'none') {
-    renderSlide(current, slide);
+  if (!currentSlide || !slide.transition || slide.transition === 'none' || direction === 'none' || currentSlide?.id === slide.id) {
+    renderSlide(current, slide, logo);
     current.classList.remove('hidden');
     currentSlide = slide;
     return;
@@ -824,13 +862,13 @@ function showSlideSimple(slide, direction) {
 
   const anim = getAnimClasses(slide.transition, direction);
   if (!anim) {
-    renderSlide(current, slide);
+    renderSlide(current, slide, logo);
     currentSlide = slide;
     return;
   }
 
   // Render new slide into `next`, animate both, then promote `next` → `current`
-  renderSlide(next, slide);
+  renderSlide(next, slide, logo);
   next.classList.remove('hidden');
   next.style.visibility = 'visible';
   next.style.pointerEvents = 'auto';
@@ -846,10 +884,12 @@ function showSlideSimple(slide, direction) {
     animTimer = null;
 
     // Swap: render the new slide fresh into `current` (avoids innerHTML/canvas loss)
-    renderSlide(current, slide);
-    current.className = `slide-container layout-${slide.layout || 'content'}`;
-    current.style.background = slide.background || '';
-    current.style.color = slide.color || '';
+    renderSlide(current, slide, logo);
+    if (!slide.soloHtml) {
+      current.className = `slide-container layout-${slide.layout || 'content'}`;
+      current.style.background = slide.background || '';
+      current.style.color = slide.color || '';
+    }
 
     // Reset next
     next.innerHTML = '';

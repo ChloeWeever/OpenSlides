@@ -208,6 +208,21 @@ function SlideEditor({ slide, onClose, onUpdate, onPreview, lang }) {
         <button onClick={cancel} className="w-6 h-6 flex items-center justify-center ui-text-4 hover:ui-text text-sm">✕</button>
       </div>
 
+      {draft.soloHtml ? (
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <div className="px-4 py-2 flex items-center gap-2 flex-shrink-0" style={{borderBottom:'1px solid var(--ui-border)'}}>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{background:'var(--ui-primary)',color:'#fff'}}>S</span>
+            <span className="text-xs ui-text-3">{t('soloSlide')}</span>
+          </div>
+          <textarea
+            value={draft.soloHtml}
+            onChange={e => setDraft(d => ({ ...d, soloHtml: e.target.value }))}
+            className="flex-1 w-full bg-transparent px-4 py-3 text-xs ui-text font-mono resize-none focus:outline-none"
+            style={{caretColor:'var(--ui-primary)'}}
+            spellCheck={false}
+          />
+        </div>
+      ) : (
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
         {/* Slide meta */}
         <div className="flex gap-3">
@@ -255,6 +270,7 @@ function SlideEditor({ slide, onClose, onUpdate, onPreview, lang }) {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -337,8 +353,12 @@ function ThumbnailStrip({ slides, currentIndex, onGoTo, onReorder, onAdd, onDupl
         <div key={slide.id || i} draggable onDragStart={(e) => handleDragStart(e, i)} onDragOver={(e) => handleDragOver(e, i)} onDrop={(e) => handleDrop(e, i)} onDragEnd={handleDragEnd} onContextMenu={(e) => handleContextMenu(e, i)}
           style={{ outline: dragOver === i && dragFrom.current !== i ? '2px solid var(--ui-primary)' : 'none', borderRadius: '6px', transition: 'outline 0.1s' }}>
           <button onClick={() => onGoTo(i)} className={`slide-thumb w-24 flex-shrink-0 no-drag ${i === currentIndex ? 'active' : ''}`}
-            title={`Slide ${i + 1} — right-click for options`}>
+            title={`Slide ${i + 1} — right-click for options`} style={{position:'relative'}}>
             <ThumbnailSlide slide={slide} />
+            {slide.soloHtml && (
+              <div style={{position:'absolute',top:3,right:3,background:'var(--ui-primary)',color:'#fff',
+                fontSize:'7px',fontWeight:'bold',padding:'1px 3px',borderRadius:'2px',lineHeight:'1.4',pointerEvents:'none'}}>S</div>
+            )}
           </button>
           <div className="text-center text-[10px] ui-text-4 mt-0.5 select-none">{i + 1}</div>
         </div>
@@ -372,7 +392,7 @@ function ThumbnailStrip({ slides, currentIndex, onGoTo, onReorder, onAdd, onDupl
   );
 }
 
-function FullscreenPresenter({ slides, startIndex, onClose }) {
+function FullscreenPresenter({ slides, startIndex, onClose, logo }) {
   const [index, setIndex] = React.useState(startIndex);
   const [showControls, setShowControls] = React.useState(true);
   const [direction, setDirection] = React.useState('forward');
@@ -387,7 +407,7 @@ function FullscreenPresenter({ slides, startIndex, onClose }) {
   React.useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
-    const send = () => { iframe.contentWindow?.postMessage({ type: 'render', slide, direction }, '*'); };
+    const send = () => { iframe.contentWindow?.postMessage({ type: 'render', slide, direction, logo }, '*'); };
     if (iframe.contentDocument?.readyState === 'complete') send();
     else iframe.onload = send;
   }, [slide, direction]);
@@ -511,11 +531,16 @@ function ImageTray({ slide, onApplyAction }) {
 }
 
 // ── PreviewPanel ──────────────────────────────────────────────────────────────
-function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, onPrev, onGoTo, onReorder, onApplyAction, onSave, onElementSelected, canUndo, canRedo, onUndo, onRedo, showEditor, onOpenEditor, onCloseEditor, onRegisterPreview, lang }) {
+function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, onPrev, onGoTo, onReorder, onApplyAction, onSave, onElementSelected, canUndo, canRedo, onUndo, onRedo, showEditor, onOpenEditor, onCloseEditor, onRegisterPreview, lang, logo, onOpenLogo }) {
   const iframeRef = React.useRef(null);
   const viewportContainerRef = React.useRef(null);
   const [viewportSize, setViewportSize] = React.useState({ width: 0, height: 0 });
   const [selectedTransition, setSelectedTransition] = React.useState(currentSlide?.transition || 'slide');
+
+  // Sync picker with the current slide's transition
+  React.useEffect(() => {
+    setSelectedTransition(currentSlide?.transition || 'slide');
+  }, [currentSlide?.id]);
   const [showTransitions, setShowTransitions] = React.useState(false);
   const [showThemes, setShowThemes] = React.useState(false);
   const [activeThemeId, setActiveThemeId] = React.useState('catppuccin');
@@ -547,8 +572,8 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
   const handlePreviewSlide = React.useCallback((previewSlide) => {
     const iframe = iframeRef.current;
     if (!iframe) return;
-    iframe.contentWindow?.postMessage({ type: 'render', slide: previewSlide, direction: 'none' }, '*');
-  }, []);
+    iframe.contentWindow?.postMessage({ type: 'render', slide: previewSlide, direction: 'none', logo }, '*');
+  }, [logo]);
 
   React.useEffect(() => {
     onRegisterPreview?.(handlePreviewSlide);
@@ -579,6 +604,7 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
       const fit = byHeight.w <= availW ? byHeight : byWidth;
       return { width: Math.round(fit.w), height: Math.round(fit.h) };
     };
+    // Set immediately from current size so iframe never starts at width:'100%'
     const rect = el.getBoundingClientRect();
     if (rect.width > 0) setViewportSize(calc(rect));
     const obs = new ResizeObserver(([entry]) => setViewportSize(calc(entry.contentRect)));
@@ -617,7 +643,7 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
   React.useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
-    const msg = { type: 'render', slide: currentSlide, direction: direction.current };
+    const msg = { type: 'render', slide: currentSlide, direction: direction.current, logo };
     const send = () => iframe.contentWindow?.postMessage(msg, '*');
     let cancelled = false;
     if (iframe.contentDocument?.readyState === 'complete') send();
@@ -649,7 +675,7 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
 
   return (
     <div className="flex flex-col h-full ui-bg select-none">
-      {fullscreen && <FullscreenPresenter slides={slides} startIndex={currentIndex} onClose={() => setFullscreen(false)} />}
+      {fullscreen && <FullscreenPresenter slides={slides} startIndex={currentIndex} onClose={() => setFullscreen(false)} logo={logo} />}
 
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2.5 no-drag flex-shrink-0" style={{borderBottom:'1px solid var(--ui-border)'}}>
@@ -697,6 +723,12 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
           )}
         </div>
 
+        {/* Brand logo */}
+        <button onClick={onOpenLogo} title={t('brandLogo')}
+          className={toolBtn(false)} style={{borderWidth:1,borderStyle:'solid',borderColor:'var(--ui-border)'}}>
+          {t('logo')}
+        </button>
+
         {/* Theme picker */}
         <div ref={themePickerRef} className="relative">
           <button onClick={() => { setShowThemes((v) => !v); setShowTransitions(false); }}
@@ -733,7 +765,11 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
           {showTransitions && (
             <div className="absolute right-0 top-full mt-1 rounded-lg shadow-xl z-10 overflow-hidden" style={{background:'var(--ui-bg-4)',border:'1px solid var(--ui-border)'}}>
               {TRANSITIONS.map((tr) => (
-                <button key={tr} onClick={() => { setSelectedTransition(tr); setShowTransitions(false); }}
+                <button key={tr} onClick={() => {
+                    setSelectedTransition(tr);
+                    setShowTransitions(false);
+                    onApplyAction({ action: 'update_slide', slideId: currentSlide.id, slide: { transition: tr } });
+                  }}
                   className={`block w-full text-left px-4 py-2 text-sm transition-colors ${tr === selectedTransition ? 'ui-primary text-white' : 'ui-text-2'}`}
                   style={tr === selectedTransition ? {background:'var(--ui-primary)',color:'#fff'} : {}}
                   onMouseEnter={e => { if (tr !== selectedTransition) e.currentTarget.style.background='var(--ui-bg-5)'; }}
@@ -763,14 +799,6 @@ function PreviewPanel({ slides, currentIndex, currentSlide, direction, onNext, o
           onMouseEnter={e => e.currentTarget.style.background='var(--ui-primary-h)'}
           onMouseLeave={e => e.currentTarget.style.background='var(--ui-primary)'}>
           {t('present')}
-        </button>
-
-        <div className="w-px h-5 mx-1" style={{background:'var(--ui-border)'}} />
-
-        {/* Save */}
-        <button onClick={onSave} title={t('save')}
-          className="w-8 h-8 rounded-lg flex items-center justify-center ui-text-3 hover:ui-text hover:ui-bg-5 transition-colors text-sm">
-          ↓
         </button>
 
         <div className="w-px h-5 mx-1" style={{background:'var(--ui-border)'}} />

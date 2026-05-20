@@ -28,6 +28,8 @@ function App() {
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const [exportOpen, setExportOpen] = React.useState(false);
+  const [logoOpen, setLogoOpen] = React.useState(false);
+  const [logo, setLogo] = React.useState(null);
   const [settings, setSettings] = React.useState({
     apiProvider: 'openai',
     apiKey: '',
@@ -65,6 +67,7 @@ function App() {
   React.useEffect(() => {
     if (!window.openslides) return;
     window.openslides.getSettings().then((s) => { if (s) setSettings(s); });
+    window.openslides.getLogo().then((l) => { if (l) setLogo(l); });
     window.openslides.listSessions().then((savedSessions) => {
       if (savedSessions?.length) {
         setSessions(savedSessions);
@@ -300,6 +303,8 @@ function App() {
             }}
             onRegisterPreview={(fn) => { previewSlideRef.current = fn; }}
             lang={lang}
+            logo={logo}
+            onOpenLogo={() => setLogoOpen(true)}
           />
         </div>
         <div className="flex-[2] min-w-0 overflow-hidden" style={{ minWidth: 320, maxWidth: 480 }}>
@@ -345,6 +350,11 @@ function App() {
         slides={slideManager.slides}
         title={sessions.find((s) => s.id === activeSessionId)?.title || 'presentation'}
         lang={lang}
+      />
+      <BrandLogoModal
+        open={logoOpen}
+        onClose={() => setLogoOpen(false)}
+        onSave={(l) => setLogo(l)}
       />
     </div>
   );

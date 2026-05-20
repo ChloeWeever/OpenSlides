@@ -1,8 +1,10 @@
-const { ipcMain, dialog, BrowserWindow } = require('electron');
+const { ipcMain, dialog, BrowserWindow, app, shell } = require('electron');
 const store = require('./store');
 const { callLLM, parseJSONResponse } = require('./llm-client');
+const { genSlideWithAgent, genSoloSlideWithAgent } = require('./agent-client');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 // Load diagram renderer assets once at startup (used in HTML/PDF export)
 const SLIDE_FRAME_DIR = path.join(__dirname, '../renderer/slide-frame');
@@ -51,6 +53,7 @@ Respond ONLY with valid JSON in one of these formats:
 1. Replace all slides: {"action":"replace_all","slides":[...]}
 2. Add slides:        {"action":"add_slides","slides":[...]}
 3. Update one slide:  {"action":"update_slide","slideId":"<id>","slide":{...}}
+   - For Solo slides (soloHtml present): {"action":"update_slide","slideId":"<id>","slide":{"soloHtml":"<complete updated html>"}}
 4. Delete a slide:    {"action":"delete_slide","slideId":"<id>"}
 5. Chat only:         {"action":"message","message":"<text>"}
 
@@ -132,54 +135,6 @@ Rules:
 - Do NOT add notes, subheading, contentHint, or any other field
 - Aim for 6-12 slides unless the request clearly needs more or fewer`;
 
-// Per-slide prompt: generates one complete slide given its outline entry
-const SLIDE_GEN_PROMPT = `You are a presentation slide designer. Generate ONE complete slide as JSON.
-
-Respond ONLY with valid JSON — no markdown fences, no explanation:
-{"action":"add_slides","slides":[{ ...slide object... }]}
-
-## Slide schema
-{
-  "id": "slide-N",
-  "layout": "title|content|section|two-column|big-quote|blank",
-  "background": "#hexcolor",
-  "transition": "slide|fade|zoom|none",
-  "elements": [ ...element objects... ]
-}
-
-## All element types — use EXACTLY these schemas:
-{"type":"kicker","text":"LABEL"}
-{"type":"heading","text":"Title","gradient":true}
-{"type":"subheading","text":"Subtitle"}
-{"type":"body","text":"Paragraph text."}
-{"type":"divider"}
-{"type":"bullets","items":["Point one","Point two","Point three"]}
-{"type":"pills","items":["Tag A","Tag B",{"text":"Accent","accent":true}]}
-{"type":"quote","text":"Quote text.","author":"Name, Title"}
-{"type":"stats","items":[{"label":"METRIC","value":"42K","delta":"+12%"},{"label":"ANOTHER","value":"$1.2M"}]}
-{"type":"cards","cols":3,"items":[{"icon":"🚀","title":"Title","body":"Description","accent":true},{"icon":"💡","title":"Title","body":"Description"}]}
-{"type":"diagram","kind":"bar","title":"Chart title","labels":["A","B","C"],"datasets":[{"label":"Series","data":[10,20,30],"color":"#89b4fa"}]}
-{"type":"diagram","kind":"line","title":"Trend","labels":["Q1","Q2","Q3"],"datasets":[{"label":"Series","data":[100,150,200]}]}
-{"type":"diagram","kind":"pie","title":"Share","labels":["A","B","C"],"datasets":[{"data":[40,35,25]}]}
-{"type":"diagram","kind":"flow","nodes":[{"id":"a","label":"Start"},{"id":"b","label":"Step"},{"id":"c","label":"End"}],"edges":[{"from":"a","to":"b"},{"from":"b","to":"c"}]}
-{"type":"diagram","kind":"mindmap","root":"Topic","children":[{"label":"Branch A","children":[{"label":"Leaf"}]},{"label":"Branch B"}]}
-
-## Layout → element pattern
-- "title":     kicker → heading(gradient:true) → subheading → divider → pills
-- "content":   kicker → heading(gradient:true) → divider → [bullets|cards|stats|diagram|body]
-- "section":   kicker → heading(gradient:true) → subheading
-- "two-column": kicker → heading → divider → body (left) and bullets/stats/image (right) — mark with {"column":"left"} / {"column":"right"}
-- "big-quote": quote with author
-- "blank":     any elements freely
-
-## Rules
-- ALWAYS start content/title slides with kicker → heading(gradient:true) → divider
-- Use the contentType hint to pick the main body element
-- Fill in REAL content from the user's original request — actual numbers, names, terms
-- Do NOT use placeholder text like "Description here" or "Your content"
-- background: alternate #0f0f1a / #13131f between slides (provided in user message)
-- Generate ONLY this single slide`;
-
 ipcMain.handle('llm:outline', async (_event, userRequest, settings) => {
   try {
     const messages = [
@@ -201,33 +156,68 @@ ipcMain.handle('llm:outline', async (_event, userRequest, settings) => {
 
 ipcMain.handle('llm:gen-slide', async (_event, { outlineSlide, allOutline, userRequest, slideIndex, totalSlides }, settings) => {
   try {
-    const bg = slideIndex % 2 === 0 ? '#0f0f1a' : '#13131f';
-    const transition = slideIndex === 0 ? 'fade' : 'slide';
-    const outlineJson = JSON.stringify(outlineSlide);
-    const prompt = `User's original request:
-${userRequest}
+    return await genSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides }, settings);
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
 
-Full outline (${totalSlides} slides total):
-${allOutline.map((s, i) => `  ${i+1}. [${s.layout}] ${s.title}${s.kicker ? ' · ' + s.kicker : ''}${s.contentType ? ' [' + s.contentType + ']' : ''}`).join('\n')}
+const SOLO_OUTLINE_PROMPT = `You are a presentation planning assistant. Given the user's request, output a slide outline as JSON.
 
-Generate slide ${slideIndex + 1} of ${totalSlides}:
-${outlineJson}
-
-Required: background="${bg}", transition="${transition}"
-Fill ALL body content with real information from the user's original request above.`;
-
-    const messages = [
-      { role: 'system', content: SLIDE_GEN_PROMPT },
-      { role: 'user', content: prompt },
-    ];
-    const rawText = await callLLM(messages, settings, 4096);
-    const parsed = parseJSONResponse(rawText);
-    if (!parsed) return { success: false, error: `幻灯片 ${slideIndex + 1} JSON解析失败: ${rawText.slice(0, 200)}` };
-    const slides = parsed.slides || (parsed.action ? null : [parsed]);
-    if (!Array.isArray(slides) || !slides.length) {
-      return { success: false, error: `幻灯片 ${slideIndex + 1} 格式错误` };
+Respond ONLY with raw JSON — no markdown, no explanation:
+{
+  "action": "outline",
+  "theme": {
+    "bg": "#0f0f1a",
+    "accent": "#6c63ff",
+    "text": "#ffffff",
+    "subtext": "#a0a0b8",
+    "font": "Inter, Arial, sans-serif",
+    "style": "dark modern gradient"
+  },
+  "slides": [
+    {
+      "id": "slide-1",
+      "title": "Slide Title",
+      "notes": "Key points and content for this slide",
+      "style": "hero — large headline, bold accent color, minimal elements"
     }
-    return { success: true, data: { action: 'add_slides', slides }, raw: rawText };
+  ]
+}
+
+Rules:
+- theme: ONE consistent design system for the whole deck. Choose colors and font that suit the topic. style = 2-4 descriptive words (e.g. "dark tech minimal", "bright clean corporate", "bold colorful startup")
+- id: "slide-1", "slide-2", … (sequential)
+- title: the real heading text for this slide
+- notes: 1-3 sentences describing what this slide should cover
+- style (per slide): layout + mood hint for the designer, e.g. "hero full-bleed", "two-column data", "big quote centered", "icon grid", "timeline horizontal", "chart + callout"
+- Aim for 6-12 slides unless the request clearly needs more or fewer`;
+
+// solo-slide generation is handled by agent-client.js (LangGraph tool calling)
+
+ipcMain.handle('llm:solo-outline', async (_event, { text, settings }) => {
+  try {
+    const messages = [
+      { role: 'system', content: SOLO_OUTLINE_PROMPT },
+      { role: 'user', content: text },
+    ];
+    const rawText = await callLLM(messages, settings, 16000);
+    const parsed = parseJSONResponse(rawText);
+    if (!parsed) return { success: false, error: `JSON parse failed: ${rawText.slice(0, 300)}` };
+    const slides = parsed.slides || parsed;
+    if (!Array.isArray(slides) || !slides.length) {
+      return { success: false, error: `Outline format error: ${rawText.slice(0, 300)}` };
+    }
+    const theme = parsed.theme || null;
+    return { success: true, data: { action: 'outline', slides, theme }, raw: rawText };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('llm:solo-slide', async (_event, { outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme, settings }) => {
+  try {
+    return await genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme }, settings);
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -238,6 +228,22 @@ ipcMain.handle('llm:chat', async (_event, messages, settings) => {
     const allMessages = [{ role: 'system', content: SYSTEM_PROMPT }, ...messages];
     const rawText = await callLLM(allMessages, settings);
     const parsed = parseJSONResponse(rawText);
+    // If still null but rawText looks like an update_slide with soloHtml, try harder
+    if (!parsed && rawText.includes('soloHtml') && rawText.includes('update_slide')) {
+      const slideIdM = rawText.match(/"slideId"\s*:\s*"([^"]+)"/);
+      const htmlStartIdx = rawText.indexOf('"soloHtml"');
+      if (slideIdM && htmlStartIdx !== -1) {
+        // Find the opening quote of the value
+        const valQ = rawText.indexOf('"', htmlStartIdx + 10) + 1;
+        // The html value ends at the last }" in the response
+        const tailIdx = rawText.lastIndexOf('"}');
+        if (valQ > 0 && tailIdx > valQ) {
+          const rawVal = rawText.slice(valQ, tailIdx);
+          const html = rawVal.replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\\\/g, '\\');
+          return { success: true, data: { action: 'update_slide', slideId: slideIdM[1], slide: { soloHtml: html } }, raw: rawText };
+        }
+      }
+    }
     return { success: true, data: parsed, raw: rawText };
   } catch (err) {
     return { success: false, error: err.message };
@@ -260,6 +266,9 @@ ipcMain.handle('settings:save', (_event, settings) => {
   store.set('modelName', settings.modelName);
   return true;
 });
+
+ipcMain.handle('logo:get', () => store.get('logo', null));
+ipcMain.handle('logo:save', (_event, logo) => { store.set('logo', logo); return true; });
 
 ipcMain.handle('presentation:save', (_event, data) => {
   store.set('presentation', data);
@@ -409,9 +418,8 @@ function renderElements(elements, layout, sectionNum) {
   return sectionNumHtml + (elements||[]).map(renderEl).join('');
 }
 
-// Shared CSS for HTML/PDF export — uses CSS variables so themes are respected
+const FONT_IMPORT = `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap"/>`;
 const SLIDE_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
   --accent:#89b4fa;--accent-2:#cba6f7;--accent-3:#f38ba8;
@@ -482,6 +490,7 @@ body{font-family:'Inter','Noto Sans SC',system-ui,sans-serif;-webkit-font-smooth
 
 
 
+
 function themeVarsStyle(tv) {
   if (!tv) return '';
   return [
@@ -499,24 +508,41 @@ function themeVarsStyle(tv) {
   ].filter(Boolean).join(';');
 }
 
-function buildSlideDiv(slide, extraClass) {
+function buildSlideDiv(slide, extraClass, logo) {
+  if (slide.soloHtml) {
+    const escaped = slide.soloHtml.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    const cls = extraClass && extraClass !== 'slide-page' ? ` ${extraClass}` : '';
+    return `<div class="slide-page${cls}" style="padding:0;overflow:hidden;align-items:center;justify-content:center;">`
+      + `<iframe class="solo-iframe" srcdoc="${escaped}" style="width:1920px;height:1080px;border:none;display:block;flex-shrink:0;transform-origin:center center;" sandbox="allow-scripts allow-same-origin"></iframe>`
+      + `</div>`;
+  }
   const bg = slide.background || '#1e1e2e';
   const color = slide.color || '#cdd6f4';
   const layout = slide.layout || 'content';
   const inner = renderElements(slide.elements, layout, slide.sectionNum);
   const tv = themeVarsStyle(slide.themeVars);
   const style = `background:${bg};color:${color}${tv ? ';' + tv : ''}`;
-  return `<div class="slide-container layout-${layout}${extraClass?' '+extraClass:''}" style="${style}">${inner}</div>`;
+  const logoHtml = (logo?.enabled && logo?.dataUrl) ? buildLogoHtml(logo) : '';
+  return `<div class="slide-container layout-${layout}${extraClass?' '+extraClass:''}" style="${style}">${inner}${logoHtml}</div>`;
 }
 
-function buildStandaloneHTML(slides, title) {
-  const slideBlocks = slides.map(s => buildSlideDiv(s, 'slide-page')).join('\n');
+function buildLogoHtml(logo) {
+  const pos = logo.position || 'bottom-right';
+  const pad = '16px';
+  const top  = pos.includes('top')  ? `top:${pad}`  : `bottom:${pad}`;
+  const side = pos.includes('left') ? `left:${pad}` : `right:${pad}`;
+  return `<img src="${logo.dataUrl}" style="position:absolute;z-index:10;pointer-events:none;width:${logo.width||80}px;opacity:${logo.opacity??1};${top};${side};" alt="logo"/>`;
+}
+
+function buildStandaloneHTML(slides, title, logo) {
+  const slideBlocks = slides.map(s => buildSlideDiv(s, 'slide-page', logo)).join('\n');
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=1920,initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>${escHtml(title||'Presentation')}</title>
+${FONT_IMPORT}
 <style>
 ${SLIDE_CSS}
 html,body{width:100%;height:100%;overflow:hidden;background:#000;}
@@ -582,6 +608,13 @@ document.addEventListener('click',function(e){
   else if(e.clientX<window.innerWidth*0.4)prev();
 });
 show(0);resetHide();
+function scaleSoloIframes(){
+  var iframes=document.querySelectorAll('.solo-iframe');
+  var s=Math.min(window.innerWidth/1920,window.innerHeight/1080);
+  iframes.forEach(function(f){f.style.transform='scale('+s+')';});
+}
+scaleSoloIframes();
+window.addEventListener('resize',scaleSoloIframes);
 </script>
 ${_chartJS ? `<script>${_chartJS}</script>` : ''}
 ${_diagramRendererJS ? `<script>${_diagramRendererJS}\n${DIAGRAM_INIT_JS}</script>` : ''}
@@ -598,231 +631,12 @@ ipcMain.handle('export:html', async (_event, { slides, title }) => {
   });
   if (canceled || !filePath) return { success: false };
   try {
-    fs.writeFileSync(filePath, buildStandaloneHTML(slides, title), 'utf8');
+    const logo = store.get('logo', null);
+    fs.writeFileSync(filePath, buildStandaloneHTML(slides, title, logo), 'utf8');
     return { success: true, filePath };
   } catch (err) {
     return { success: false, error: err.message };
   }
 });
 
-ipcMain.handle('export:pdf', async (_event, { slides, title }) => {
-  const win = BrowserWindow.getFocusedWindow();
-  const { filePath, canceled } = await dialog.showSaveDialog(win, {
-    title: 'Export as PDF',
-    defaultPath: `${title||'presentation'}.pdf`,
-    filters: [{ name: 'PDF File', extensions: ['pdf'] }],
-  });
-  if (canceled || !filePath) return { success: false };
 
-  const W = 1920, H = 1080;
-
-  // Single offscreen window, single page load for all slides
-  const offscreen = new BrowserWindow({
-    width: W, height: H,
-    x: -W - 100, y: 0,
-    frame: false, skipTaskbar: true,
-    webPreferences: { contextIsolation: true, deviceScaleFactor: 1 },
-  });
-  offscreen.showInactive();
-
-  try {
-    // Build one HTML containing every slide; show only one at a time
-    const html = buildAllSlidesHTML(slides, W, H);
-    const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-
-    // Wait for page load + diagram init signal
-    await new Promise((resolve, reject) => {
-      let settled = false;
-      const onConsole = (_e, _level, message) => {
-        if (message === '__ready__' && !settled) { settled = true; cleanup(); resolve(); }
-      };
-      const onLoad = () => {
-        if (!settled) setTimeout(() => { if (!settled) { settled = true; cleanup(); resolve(); } }, 300);
-      };
-      const onFail = (_, code, desc) => { cleanup(); reject(new Error(desc || 'load failed')); };
-      function cleanup() {
-        offscreen.webContents.removeListener('console-message', onConsole);
-        offscreen.webContents.removeListener('did-finish-load', onLoad);
-        offscreen.webContents.removeListener('did-fail-load', onFail);
-      }
-      offscreen.webContents.on('console-message', onConsole);
-      offscreen.webContents.once('did-finish-load', onLoad);
-      offscreen.webContents.once('did-fail-load', onFail);
-      offscreen.loadURL(dataUrl);
-    });
-
-    // Capture each slide by showing it and screenshotting
-    const jpegs = [];
-    for (let i = 0; i < slides.length; i++) {
-      await offscreen.webContents.executeJavaScript(`
-        document.querySelectorAll('.slide-page').forEach(function(el, j) {
-          el.style.display = j === ${i} ? 'flex' : 'none';
-        });
-      `);
-      // One rAF tick to ensure repaint
-      await offscreen.webContents.executeJavaScript(
-        'new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); })'
-      );
-      const image = await offscreen.webContents.capturePage({ x: 0, y: 0, width: W, height: H });
-      jpegs.push(image.toJPEG(92));
-    }
-
-    const pdfBytes = buildPDFFromJPEGs(jpegs, W, H);
-    fs.writeFileSync(filePath, pdfBytes);
-    return { success: true, filePath };
-  } catch (err) {
-    return { success: false, error: err.message };
-  } finally {
-    offscreen.destroy();
-  }
-});
-
-// Render a single slide as a full-page HTML
-function buildSingleSlideHTML(slide, w, h) {
-  const bg = slide.background || '#1e1e2e';
-  const color = slide.color || '#cdd6f4';
-  const layout = slide.layout || 'content';
-  const inner = renderElements(slide.elements, layout, slide.sectionNum);
-  const tv = themeVarsStyle(slide.themeVars);
-  const style = `background:${bg};color:${color}${tv ? ';' + tv : ''}`;
-  return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"/>
-<style>
-${SLIDE_CSS}
-html,body{margin:0;padding:0;width:${w}px;height:${h}px;overflow:hidden;}
-.slide-container{position:absolute;inset:0;}
-</style></head>
-<body>
-<div class="slide-container layout-${layout}" style="${style}">${inner}</div>
-${_chartJS ? `<script>${_chartJS}</script>` : ''}
-${_diagramRendererJS ? `<script>${_diagramRendererJS}\n${DIAGRAM_INIT_JS}</script>` : ''}
-</body>
-</html>`;
-}
-
-// Single HTML with all slides — used by PDF export to avoid reloading per slide
-function buildAllSlidesHTML(slides, w, h) {
-  const pages = slides.map((s, i) => {
-    const bg = s.background || '#1e1e2e';
-    const color = s.color || '#cdd6f4';
-    const layout = s.layout || 'content';
-    const inner = renderElements(s.elements, layout, s.sectionNum);
-    const tv = themeVarsStyle(s.themeVars);
-    const style = `background:${bg};color:${color}${tv ? ';' + tv : ''}`;
-    return `<div class="slide-page" style="display:${i === 0 ? 'flex' : 'none'};position:absolute;inset:0;">`
-      + `<div class="slide-container layout-${layout}" style="${style}">${inner}</div>`
-      + `</div>`;
-  }).join('\n');
-
-  // DIAGRAM_INIT_JS already ends with console.log('__ready__')
-  const diagScript = _diagramRendererJS
-    ? `<script>${_diagramRendererJS}\n${DIAGRAM_INIT_JS}</script>`
-    : `<script>console.log('__ready__');</script>`;
-
-  return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"/>
-<style>
-${SLIDE_CSS}
-html,body{margin:0;padding:0;width:${w}px;height:${h}px;overflow:hidden;background:#000;}
-</style></head>
-<body>
-${pages}
-${_chartJS ? `<script>${_chartJS}</script>` : ''}
-${diagScript}
-</body>
-</html>`;
-}
-
-// Read actual pixel dimensions from a JPEG buffer (SOF marker)
-function jpegDimensions(buf) {
-  let i = 2;
-  while (i < buf.length) {
-    if (buf[i] !== 0xff) break;
-    const marker = buf[i + 1];
-    const segLen = buf.readUInt16BE(i + 2);
-    // SOF markers: 0xC0–0xC3, 0xC5–0xC7, 0xC9–0xCB, 0xCD–0xCF
-    if ((marker >= 0xc0 && marker <= 0xc3) || (marker >= 0xc5 && marker <= 0xc7) ||
-        (marker >= 0xc9 && marker <= 0xcb) || (marker >= 0xcd && marker <= 0xcf)) {
-      return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
-    }
-    i += 2 + segLen;
-  }
-  return null;
-}
-
-// Minimal pure-JS PDF builder — embeds each JPEG as a full-page image
-function buildPDFFromJPEGs(jpegs, w, h) {
-  // PDF page size in points — use 16:9 at 72 dpi (presentation standard)
-  const pw = Math.round(w * 72 / 96);  // 1440
-  const ph = Math.round(h * 72 / 96);  // 810
-
-  const parts = [];
-  const offsets = [];
-
-  const add = (str) => parts.push(Buffer.isBuffer(str) ? str : Buffer.from(str, 'latin1'));
-  const pos = () => parts.reduce((s, b) => s + b.length, 0);
-
-  add('%PDF-1.4\n');
-
-  const imageObjNums = [];
-  const pageObjNums = [];
-  const catalogObjNum = 1;
-  const pagesObjNum = 2;
-  let nextObj = 3;
-
-  // Write image + page objects for each slide
-  for (let i = 0; i < jpegs.length; i++) {
-    const imgNum = nextObj++;
-    const pageNum = nextObj++;
-    imageObjNums.push(imgNum);
-    pageObjNums.push(pageNum);
-
-    // Read actual pixel dimensions from JPEG — capturePage on HiDPI returns 2x pixels
-    const imgData = jpegs[i];
-    const dims = jpegDimensions(imgData);
-    const iw = dims ? dims.w : w;
-    const ih = dims ? dims.h : h;
-
-    // Image object
-    offsets[imgNum] = pos();
-    add(`${imgNum} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${iw} /Height ${ih} `
-      + `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imgData.length} >>\nstream\n`);
-    add(imgData);
-    add('\nendstream\nendobj\n');
-
-    // Page object
-    offsets[pageNum] = pos();
-    add(`${pageNum} 0 obj\n`
-      + `<< /Type /Page /Parent ${pagesObjNum} 0 R /MediaBox [0 0 ${pw} ${ph}] `
-      + `/Resources << /XObject << /Im${i} ${imgNum} 0 R >> >> `
-      + `/Contents ${pageNum + 1} 0 R >>\nendobj\n`);
-
-    // Content stream: draw image filling the page
-    const contentNum = nextObj++;
-    const stream = `q ${pw} 0 0 ${ph} 0 0 cm /Im${i} Do Q`;
-    offsets[contentNum] = pos();
-    add(`${contentNum} 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`);
-  }
-
-  // Catalog
-  offsets[catalogObjNum] = pos();
-  add(`${catalogObjNum} 0 obj\n<< /Type /Catalog /Pages ${pagesObjNum} 0 R >>\nendobj\n`);
-
-  // Pages
-  offsets[pagesObjNum] = pos();
-  add(`${pagesObjNum} 0 obj\n<< /Type /Pages /Kids [`
-    + pageObjNums.map(n => `${n} 0 R`).join(' ')
-    + `] /Count ${pageObjNums.length} >>\nendobj\n`);
-
-  // xref
-  const xrefPos = pos();
-  const totalObjs = nextObj;
-  add(`xref\n0 ${totalObjs}\n`);
-  add('0000000000 65535 f \n');
-  for (let i = 1; i < totalObjs; i++) {
-    add(String(offsets[i] || 0).padStart(10, '0') + ' 00000 n \n');
-  }
-  add(`trailer\n<< /Size ${totalObjs} /Root ${catalogObjNum} 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`);
-
-  return Buffer.concat(parts);
-}
