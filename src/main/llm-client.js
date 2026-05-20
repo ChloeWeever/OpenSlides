@@ -33,6 +33,10 @@ function request(url, options, body, signal) {
   });
 }
 
+function stripThinkingTags(text) {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
+}
+
 async function callLLM(messages, settings, maxTokens = 4096, signal) {
   const { apiProvider, apiKey, baseUrl, modelName } = settings;
   const base = baseUrl.replace(/\/$/, '').replace(/\/v1$/, '');
@@ -73,7 +77,7 @@ async function callLLM(messages, settings, maxTokens = 4096, signal) {
       },
     }, body, signal);
     if (res.status !== 200) throw new Error(`LLM API error ${res.status}: ${JSON.stringify(res.body)}`);
-    return res.body.choices?.[0]?.message?.content ?? '';
+    return stripThinkingTags(res.body.choices?.[0]?.message?.content ?? '');
   }
 }
 

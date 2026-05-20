@@ -327,6 +327,9 @@ Output the complete HTML document now.`;
           .join('')
       : String(response.content ?? '');
 
+  // Strip think/thinking tags from models that embed reasoning in the output
+  html = html.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
+
   // Strip markdown fences if model wrapped the HTML
   html = html.replace(/^```(?:html)?\s*/i, '').replace(/```\s*$/, '').trim();
 
