@@ -51,6 +51,10 @@
 - Anthropic（Claude 3.5 Sonnet 等）
 - 任意 OpenAI 兼容接口（Azure、Groq、本地 Ollama 等）
 
+## 下载
+
+Windows 和 macOS 的预构建安装包可在 [Releases 页面](https://github.com/ChloeWeever/OpenSlides/releases) 下载。
+
 ## 快速开始
 
 ### 环境要求

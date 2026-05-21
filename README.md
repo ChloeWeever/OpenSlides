@@ -51,6 +51,10 @@
 - Anthropic (Claude 3.5 Sonnet, etc.)
 - Any OpenAI-compatible endpoint (Azure, Groq, local Ollama, etc.)
 
+## Download
+
+Pre-built installers for Windows and macOS are available on the [Releases page](https://github.com/ChloeWeever/OpenSlides/releases).
+
 ## Getting Started
 
 ### Prerequisites
