@@ -23,7 +23,7 @@
 
 > generated with **claude-sonnet-4-6** in OpenSlides
 
-- [Introduce OpenSlides — Solo mode · SAP design style](https://chloeweever.github.io/OpenSlides/example/Introduce-OpenSlides.html)
+- [Introduce OpenSlides — Solo mode](https://chloeweever.github.io/OpenSlides/example/Introduce-OpenSlides.html)
 - [Introduce GitHub — Solo mode](https://chloeweever.github.io/OpenSlides/example/Introduce-Github.html)
 - [History of AI — Template mode](https://chloeweever.github.io/OpenSlides/example/History-of-AI.html)
 
