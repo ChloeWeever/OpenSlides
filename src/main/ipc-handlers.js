@@ -457,14 +457,26 @@ ipcMain.handle('workspace:pick-files', async () => {
 });
 
 ipcMain.handle('workspace:describe-image', async (_event, { filePath }) => {
+  const label = path.basename(filePath);
+  console.log(`[ocr] start: ${label}`);
+  const t0 = Date.now();
   try {
     const { createWorker } = require('tesseract.js');
-    const worker = await createWorker('eng+chi_sim');
-    const { data: { text } } = await worker.recognize(filePath);
+    const worker = await createWorker('eng+chi_sim', 1, {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          process.stdout.write(`\r[ocr] ${label}: ${Math.round(m.progress * 100)}%`);
+        }
+      },
+    });
+    const { data: { text, confidence } } = await worker.recognize(filePath);
     await worker.terminate();
+    process.stdout.write('\n');
     const trimmed = text.trim();
+    console.log(`[ocr] done: ${label} — ${trimmed.length} chars, confidence ${Math.round(confidence)}% (${Date.now() - t0}ms)`);
     return { success: true, description: trimmed };
   } catch (err) {
+    console.error(`[ocr] error: ${label} — ${err.message} (${Date.now() - t0}ms)`);
     return { success: false, error: err.message };
   }
 });
