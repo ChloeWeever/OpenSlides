@@ -23,7 +23,7 @@
 
 > 以下示例均由 **claude-sonnet-4-6** 在 OpenSlides 中生成
 
-- [介绍 OpenSlides — Solo 模式 · SAP 设计风格](https://chloeweever.github.io/OpenSlides/example/Introduce-OpenSlides.html)
+- [介绍 OpenSlides — Solo 模式](https://chloeweever.github.io/OpenSlides/example/Introduce-OpenSlides.html)
 - [介绍 GitHub — Solo 模式](https://chloeweever.github.io/OpenSlides/example/Introduce-Github.html)
 - [AI 发展史 — Template 模式](https://chloeweever.github.io/OpenSlides/example/History-of-AI.html)
 
