@@ -76,7 +76,7 @@ function SettingsModal({ open, onClose, onSave, onHelp, lang }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm no-drag">
-      <div className="ui-bg-3 border ui-border rounded-xl shadow-2xl w-full max-w-lg p-6 panel-enter" style={{borderWidth:1,borderStyle:'solid'}}>
+      <div className="ui-bg-3 border ui-border rounded-xl shadow-2xl w-full p-6 panel-enter" style={{borderWidth:1,borderStyle:'solid',maxWidth:780}}>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -91,115 +91,120 @@ function SettingsModal({ open, onClose, onSave, onHelp, lang }) {
           </button>
         </div>
 
-        <div className="space-y-4">
-          {/* Provider */}
-          <div>
-            <label className="block text-sm font-medium ui-text-2 mb-1.5">{t('provider')}</label>
-            <div className="grid grid-cols-3 gap-2">
-              {['openai', 'anthropic', 'litellm'].map((p) => (
-                <button
-                  key={p}
-                  onClick={() => handleProviderChange(p)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
-                    form.apiProvider === p
-                      ? 'ui-primary'
-                      : 'ui-bg-4 ui-border ui-text-3 hover:ui-text hover:ui-border-2'
-                  }`}
-                  style={form.apiProvider === p ? {borderWidth:1,borderStyle:'solid',borderColor:'var(--ui-primary)'} : {borderWidth:1,borderStyle:'solid'}}
-                >
-                  {p === 'openai' ? 'OpenAI' : p === 'anthropic' ? 'Anthropic' : 'LiteLLM'}
-                </button>
-              ))}
+        {/* Two-column body */}
+        <div className="flex gap-6">
+          {/* Left: AI settings */}
+          <div className="flex-1 min-w-0 space-y-4">
+            {/* Provider */}
+            <div>
+              <label className="block text-sm font-medium ui-text-2 mb-1.5">{t('provider')}</label>
+              <div className="grid grid-cols-3 gap-2">
+                {['openai', 'anthropic', 'litellm'].map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => handleProviderChange(p)}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium border transition-all ${
+                      form.apiProvider === p
+                        ? 'ui-primary'
+                        : 'ui-bg-4 ui-border ui-text-3 hover:ui-text hover:ui-border-2'
+                    }`}
+                    style={form.apiProvider === p ? {borderWidth:1,borderStyle:'solid',borderColor:'var(--ui-primary)'} : {borderWidth:1,borderStyle:'solid'}}
+                  >
+                    {p === 'openai' ? 'OpenAI' : p === 'anthropic' ? 'Anthropic' : 'LiteLLM'}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
-          {/* API Key */}
-          <div>
-            <label className="block text-sm font-medium ui-text-2 mb-1.5">{t('apiKey')}</label>
-            <input
-              type="password"
-              value={form.apiKey}
-              onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
-              placeholder="sk-..."
-              className={inputCls}
-              style={{outline:'none'}}
-              onFocus={e => e.target.style.boxShadow='0 0 0 2px var(--ui-primary)'}
-              onBlur={e => e.target.style.boxShadow=''}
-            />
-          </div>
-
-          {/* Base URL */}
-          <div>
-            <label className="block text-sm font-medium ui-text-2 mb-1.5">{t('baseUrl')}</label>
-            <input
-              type="text"
-              value={form.baseUrl}
-              onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
-              className={inputCls}
-              style={{outline:'none'}}
-              onFocus={e => e.target.style.boxShadow='0 0 0 2px var(--ui-primary)'}
-              onBlur={e => e.target.style.boxShadow=''}
-            />
-          </div>
-
-          {/* Model + Discover */}
-          <div>
-            <label className="block text-sm font-medium ui-text-2 mb-1.5">{t('model')}</label>
-            <div className="flex gap-2">
+            {/* API Key */}
+            <div>
+              <label className="block text-sm font-medium ui-text-2 mb-1.5">{t('apiKey')}</label>
               <input
-                type="text"
-                value={form.modelName}
-                onChange={(e) => setForm((f) => ({ ...f, modelName: e.target.value }))}
-                placeholder="gpt-4o"
+                type="password"
+                value={form.apiKey}
+                onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
+                placeholder="sk-..."
                 className={inputCls}
                 style={{outline:'none'}}
                 onFocus={e => e.target.style.boxShadow='0 0 0 2px var(--ui-primary)'}
                 onBlur={e => e.target.style.boxShadow=''}
               />
-              <button
-                onClick={handleDiscover}
-                disabled={discovering || !form.apiKey}
-                className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium border ui-border ui-text-3 hover:ui-text hover:ui-border-2 disabled:opacity-40 disabled:cursor-not-allowed transition-all whitespace-nowrap"
-                style={{borderWidth:1,borderStyle:'solid'}}
-                title={t('discoverModels')}
-              >
-                {discovering ? '…' : t('discover')}
-              </button>
             </div>
 
-            {/* Error */}
-            {discoverError && (
-              <p className="text-xs mt-1.5" style={{color:'var(--ui-error, #f38ba8)'}}>{discoverError}</p>
-            )}
+            {/* Base URL */}
+            <div>
+              <label className="block text-sm font-medium ui-text-2 mb-1.5">{t('baseUrl')}</label>
+              <input
+                type="text"
+                value={form.baseUrl}
+                onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
+                className={inputCls}
+                style={{outline:'none'}}
+                onFocus={e => e.target.style.boxShadow='0 0 0 2px var(--ui-primary)'}
+                onBlur={e => e.target.style.boxShadow=''}
+              />
+            </div>
 
-            {/* Model dropdown list */}
-            {showModelList && discoveredModels.length > 0 && (
-              <div className="mt-1.5 ui-bg-4 border ui-border rounded-lg overflow-hidden" style={{borderWidth:1,borderStyle:'solid',maxHeight:200,overflowY:'auto'}}>
-                {discoveredModels.map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => handleSelectModel(m)}
-                    className={`w-full text-left px-3 py-2 text-xs transition-colors hover:ui-bg-5 ${
-                      form.modelName === m ? 'ui-text font-medium' : 'ui-text-3'
-                    }`}
-                  >
-                    {form.modelName === m && <span className="mr-1.5" style={{color:'var(--ui-primary)'}}>✓</span>}
-                    {m}
-                  </button>
-                ))}
+            {/* Model + Discover */}
+            <div>
+              <label className="block text-sm font-medium ui-text-2 mb-1.5">{t('model')}</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={form.modelName}
+                  onChange={(e) => setForm((f) => ({ ...f, modelName: e.target.value }))}
+                  placeholder="gpt-4o"
+                  className={inputCls}
+                  style={{outline:'none'}}
+                  onFocus={e => e.target.style.boxShadow='0 0 0 2px var(--ui-primary)'}
+                  onBlur={e => e.target.style.boxShadow=''}
+                />
+                <button
+                  onClick={handleDiscover}
+                  disabled={discovering || !form.apiKey}
+                  className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium border ui-border ui-text-3 hover:ui-text hover:ui-border-2 disabled:opacity-40 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+                  style={{borderWidth:1,borderStyle:'solid'}}
+                  title={t('discoverModels')}
+                >
+                  {discovering ? '…' : t('discover')}
+                </button>
               </div>
-            )}
-          </div>
-        </div>
 
-        {/* ── Desktop Pet ── */}
-        <div className="mt-4 pt-4" style={{borderTop:'1px solid var(--ui-border)'}}>
-          <p className="text-xs font-semibold ui-text-3 uppercase tracking-wide mb-3">{t('petSection')}</p>
-          <PetdexGallery
-            activePetUrl={form.petSpritesheetUrl || ''}
-            onSelect={(url) => setForm(f => ({ ...f, petSpritesheetUrl: url }))}
-            onClear={() => setForm(f => ({ ...f, petSpritesheetUrl: '' }))}
-          />
+              {discoverError && (
+                <p className="text-xs mt-1.5" style={{color:'var(--ui-error, #f38ba8)'}}>{discoverError}</p>
+              )}
+
+              {showModelList && discoveredModels.length > 0 && (
+                <div className="mt-1.5 ui-bg-4 border ui-border rounded-lg overflow-hidden" style={{borderWidth:1,borderStyle:'solid',maxHeight:200,overflowY:'auto'}}>
+                  {discoveredModels.map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => handleSelectModel(m)}
+                      className={`w-full text-left px-3 py-2 text-xs transition-colors hover:ui-bg-5 ${
+                        form.modelName === m ? 'ui-text font-medium' : 'ui-text-3'
+                      }`}
+                    >
+                      {form.modelName === m && <span className="mr-1.5" style={{color:'var(--ui-primary)'}}>✓</span>}
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div style={{width:1, background:'var(--ui-border)', flexShrink:0}} />
+
+          {/* Right: Desktop Pet */}
+          <div style={{width:280, flexShrink:0}}>
+            <p className="text-xs font-semibold ui-text-3 uppercase tracking-wide mb-3">{t('petSection')}</p>
+            <PetdexGallery
+              activePetUrl={form.petSpritesheetUrl || ''}
+              onSelect={(url) => setForm(f => ({ ...f, petSpritesheetUrl: url }))}
+              onClear={() => setForm(f => ({ ...f, petSpritesheetUrl: '' }))}
+            />
+          </div>
         </div>
 
         {/* Footer */}
