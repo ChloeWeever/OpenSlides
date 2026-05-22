@@ -75,6 +75,13 @@ const STRINGS = {
     genAborted:          '⏹ Generation stopped ({0} slides kept)',
     stopGeneration:      'Stop',
 
+    // workspace
+    workspace:           'Workspace',
+    workspaceUpload:     'Upload files',
+    workspaceEmpty:      'No files — add images or docs for AI reference',
+    workspaceClear:      'Clear all',
+    workspaceHint:       'Files in workspace will be referenced by AI when generating slides',
+
     // preview panel toolbar
     prevSlide:           'Previous slide',
     nextSlide:           'Next slide',
@@ -203,6 +210,13 @@ const STRINGS = {
     genDoneAll:          '✓ 全部 {0} 页幻灯片已生成完成！',
     genAborted:          '⏹ 已停止（已保留 {0} 页）',
     stopGeneration:      '停止',
+
+    // workspace
+    workspace:           '工作区',
+    workspaceUpload:     '上传文件',
+    workspaceEmpty:      '暂无文件 — 可添加图片或文档供 AI 参考',
+    workspaceClear:      '全部清除',
+    workspaceHint:       '工作区中的文件将在生成幻灯片时被 AI 参考',
 
     // preview panel toolbar
     prevSlide:           '上一张',

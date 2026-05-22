@@ -64,6 +64,7 @@ function App() {
   const [sessions, setSessions] = React.useState([]);
   const [activeSessionId, setActiveSessionId] = React.useState(null);
   const [messages, setMessages] = React.useState(INIT_MESSAGES);
+  const [workspaceFiles, setWorkspaceFiles] = React.useState([]);
 
   // Load settings + sessions on mount
   React.useEffect(() => {
@@ -77,6 +78,7 @@ function App() {
         const latest = savedSessions[0];
         setActiveSessionId(latest.id);
         setMessages(latest.messages?.length ? latest.messages : INIT_MESSAGES);
+        setWorkspaceFiles(latest.workspaceFiles || []);
         if (latest.slides?.length) {
           slideManager.loadFromSlides(latest.slides);
         }
@@ -97,12 +99,12 @@ function App() {
     if (!activeSessionId) return;
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      persistSession({ id: activeSessionId }, messages, slideManager.slides);
+      persistSession({ id: activeSessionId }, messages, slideManager.slides, workspaceFiles);
     }, 800);
     return () => clearTimeout(saveTimer.current);
-  }, [slideManager.slides, messages, activeSessionId]);
+  }, [slideManager.slides, messages, activeSessionId, workspaceFiles]);
 
-  function persistSession(partial, msgs, slds) {
+  function persistSession(partial, msgs, slds, wsFiles) {
     if (!window.openslides) return;
     setSessions((prev) => {
       const existing = prev.find((s) => s.id === partial.id) || {};
@@ -111,6 +113,7 @@ function App() {
         ...partial,
         messages: msgs,
         slides: slds,
+        workspaceFiles: wsFiles ?? existing.workspaceFiles ?? [],
         updatedAt: Date.now(),
         title: deriveTitleFromMessages(msgs) || existing.title || 'Untitled',
       };
@@ -131,34 +134,36 @@ function App() {
   const handleSelectSession = React.useCallback((id) => {
     // Save current first
     if (activeSessionId) {
-      persistSession({ id: activeSessionId }, messages, slideManager.slides);
+      persistSession({ id: activeSessionId }, messages, slideManager.slides, workspaceFiles);
     }
     const target = sessions.find((s) => s.id === id);
     if (!target) return;
     setActiveSessionId(id);
     setMessages(target.messages?.length ? target.messages : INIT_MESSAGES);
+    setWorkspaceFiles(target.workspaceFiles || []);
     setSelectedElement(null);
     if (target.slides?.length) {
       slideManager.loadFromSlides(target.slides);
     } else {
       slideManager.loadFromSlides(null);
     }
-  }, [activeSessionId, messages, sessions, slideManager]);
+  }, [activeSessionId, messages, sessions, slideManager, workspaceFiles]);
 
   // Create a new session
   const handleNewSession = React.useCallback(() => {
     if (activeSessionId) {
-      persistSession({ id: activeSessionId }, messages, slideManager.slides);
+      persistSession({ id: activeSessionId }, messages, slideManager.slides, workspaceFiles);
     }
     const s = newSession();
     setSessions((prev) => [s, ...prev]);
     setActiveSessionId(s.id);
     setMessages(INIT_MESSAGES);
+    setWorkspaceFiles([]);
     setSelectedElement(null);
     slideManager.loadFromSlides(null);
     if (window.openslides) window.openslides.saveSession(s);
     setSidebarOpen(false);
-  }, [activeSessionId, messages, slideManager]);
+  }, [activeSessionId, messages, slideManager, workspaceFiles]);
 
   // Delete a session
   const handleDeleteSession = React.useCallback((id) => {
@@ -171,12 +176,14 @@ function App() {
         if (other) {
           setActiveSessionId(other.id);
           setMessages(other.messages?.length ? other.messages : INIT_MESSAGES);
+          setWorkspaceFiles(other.workspaceFiles || []);
           if (other.slides?.length) slideManager.loadFromSlides(other.slides);
           else slideManager.loadFromSlides(null);
         } else {
           const fresh = newSession();
           setActiveSessionId(fresh.id);
           setMessages(INIT_MESSAGES);
+          setWorkspaceFiles([]);
           slideManager.loadFromSlides(null);
           if (window.openslides) window.openslides.saveSession(fresh);
           return [fresh];
@@ -341,9 +348,12 @@ function App() {
               onClearSelection={() => setSelectedElement(null)}
               messages={messages}
               setMessages={setMessages}
+              workspaceFiles={workspaceFiles}
+              setWorkspaceFiles={setWorkspaceFiles}
               onNewSession={handleNewSession}
               onBusyChange={setIsBusy}
               lang={lang}
+              sessionId={activeSessionId}
             />
           )}
         </div>

@@ -268,7 +268,7 @@ Call the generate_slide tool with the complete slide object.`;
   return { success: true, data: { action: 'add_slides', slides: [slide] } };
 }
 
-async function genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme }, settings, signal) {
+async function genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme, workspaceFiles }, settings, signal) {
   const label = `solo slide ${slideIndex + 1}/${totalSlides} "${outlineSlide.title}"`;
   log.info(`▶ genSoloSlide ${label} — model: ${settings.modelName || 'gpt-4o'}`);
   const t0 = Date.now();
@@ -287,7 +287,24 @@ Design theme (apply consistently):
 Content brief: ${outlineSlide.notes || outlineSlide.title || ''}
 Slide style: ${outlineSlide.style || 'content slide'}
 This is slide ${slideIndex + 1} of ${totalSlides}
-
+${(() => {
+  const lines = [];
+  // Assigned image for this slide (from outline planning)
+  if (outlineSlide.imageRef && workspaceFiles?.length) {
+    const img = workspaceFiles.find(f => f.type === 'image' && f.name === outlineSlide.imageRef);
+    if (img) {
+      lines.push(`\nAssigned image: use <img src="workspace://${img.name}"> to embed it in this slide.`);
+      if (img.description) lines.push(`OCR text from image: "${img.description.slice(0, 500)}"`);
+    }
+  }
+  // Text reference documents (available to all slides)
+  const txts = workspaceFiles?.filter(f => f.type === 'text') || [];
+  if (txts.length) {
+    lines.push('\n--- Reference documents ---');
+    txts.forEach(f => lines.push(`[${f.name}]:\n${f.text.slice(0, 2000)}`));
+  }
+  return lines.join('\n');
+})()}
 Output the complete HTML document now.`;
 
   const systemSize = SOLO_SLIDE_SYSTEM.length;
@@ -308,6 +325,13 @@ Output the complete HTML document now.`;
 
   // Strip markdown fences if model wrapped the HTML
   html = html.replace(/^```(?:html)?\s*/i, '').replace(/```\s*$/, '').trim();
+
+  // Replace workspace:// placeholders with actual dataUrls
+  if (workspaceFiles?.length) {
+    const imgMap = {};
+    workspaceFiles.filter(f => f.type === 'image').forEach(f => { imgMap[f.name] = f.dataUrl; });
+    html = html.replace(/workspace:\/\/([^\s"']+)/g, (match, name) => imgMap[name] || match);
+  }
 
   // If truncated (no closing tags), patch it so the browser can at least render what's there
   if (html && !html.includes('</html>')) {

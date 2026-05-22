@@ -21,6 +21,83 @@ function Message({ msg }) {
   );
 }
 
+function WorkspaceBar({ files, onUpload, onRemove, onClear, disabled }) {
+  const hasFiles = files.length > 0;
+  return (
+    <div className="mx-4 mb-2 rounded-xl overflow-hidden" style={{background:'var(--ui-bg-4)',border:'1px solid var(--ui-border)'}}>
+      <div className="px-3 py-1.5 flex items-center gap-2" style={{borderBottom: hasFiles ? '1px solid var(--ui-border)' : 'none'}}>
+        <span className="text-[11px] font-semibold ui-text-3 flex-1">{t('workspace')}</span>
+        <button
+          onClick={onUpload}
+          disabled={disabled}
+          className="text-[10px] px-2 py-0.5 rounded transition-all disabled:opacity-40"
+          style={{background:'var(--ui-primary)',color:'#fff'}}
+          onMouseEnter={e => { if (!e.currentTarget.disabled) e.currentTarget.style.background='var(--ui-primary-h)'; }}
+          onMouseLeave={e => e.currentTarget.style.background='var(--ui-primary)'}
+        >
+          + {t('workspaceUpload')}
+        </button>
+        {hasFiles && (
+          <button
+            onClick={onClear}
+            disabled={disabled}
+            className="text-[10px] px-2 py-0.5 rounded ui-text-4 hover:ui-text-3 transition-colors disabled:opacity-40"
+            style={{background:'var(--ui-bg-5)'}}
+          >
+            {t('workspaceClear')}
+          </button>
+        )}
+      </div>
+      {hasFiles && (
+        <div className="p-2 flex flex-wrap gap-2">
+          {files.map((f, i) => (
+            <div key={i} className="relative group flex-shrink-0" style={{width:60}}>
+              {f.type === 'image' ? (
+                <div style={{position:'relative'}}>
+                  <img
+                    src={f.dataUrl}
+                    alt={f.name}
+                    title={f.description || f.name}
+                    style={{width:60,height:45,objectFit:'cover',borderRadius:6,display:'block',border:'1px solid var(--ui-border)',opacity: f.describing ? 0.5 : 1}}
+                  />
+                  {f.describing && (
+                    <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:6,background:'rgba(0,0,0,0.3)'}}>
+                      <span className="thinking-dot" style={{width:5,height:5}} />
+                      <span className="thinking-dot" style={{width:5,height:5}} />
+                      <span className="thinking-dot" style={{width:5,height:5}} />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  title={f.name}
+                  className="flex flex-col items-center justify-center gap-0.5 text-center"
+                  style={{width:60,height:45,borderRadius:6,border:'1px solid var(--ui-border)',background:'var(--ui-bg-5)'}}
+                >
+                  <span style={{fontSize:18}}>📄</span>
+                  <span className="text-[9px] ui-text-3 truncate w-full px-1 leading-tight">{f.name}</span>
+                </div>
+              )}
+              <button
+                onClick={() => onRemove(i)}
+                className="absolute -top-1 -right-1 w-4 h-4 rounded-full items-center justify-center text-[9px] font-bold hidden group-hover:flex"
+                style={{background:'#f38ba8',color:'#000'}}
+              >
+                ✕
+              </button>
+              <div className="text-[9px] ui-text-4 truncate mt-0.5 text-center leading-tight" title={f.name}
+                style={{maxWidth:60}}>{f.name.length > 9 ? f.name.slice(0,8)+'…' : f.name}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {!hasFiles && (
+        <div className="px-3 py-2 text-[10px] ui-text-4">{t('workspaceEmpty')}</div>
+      )}
+    </div>
+  );
+}
+
 function GenerationProgress({ outline, currentStep, done, error }) {
   if (!outline) return null;
   const [collapsed, setCollapsed] = React.useState(false);
@@ -87,7 +164,7 @@ function GenerationProgress({ outline, currentStep, done, error }) {
   );
 }
 
-function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElement, onClearSelection, messages, setMessages, onNewSession, onBusyChange, lang }) {
+function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElement, onClearSelection, messages, setMessages, workspaceFiles, setWorkspaceFiles, onNewSession, onBusyChange, lang, sessionId }) {
   const [input, setInput] = React.useState('');
   const [thinking, setThinking] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -95,7 +172,8 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
   const [genStep, setGenStep] = React.useState(0);
   const [genDone, setGenDone] = React.useState(false);
   const [genError, setGenError] = React.useState('');
-  const [genMode, setGenMode] = React.useState('template'); // 'template' | 'solo'
+  const [genMode, setGenMode] = React.useState('solo'); // 'template' | 'solo'
+  const [showWorkspace, setShowWorkspace] = React.useState(false);
   const endRef = React.useRef(null);
   const textareaRef = React.useRef(null);
   const abortRef = React.useRef(false);
@@ -105,9 +183,51 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
     t('quickPrompt4'), t('quickPrompt5'),
   ];
 
+  const handleWorkspaceUpload = React.useCallback(async () => {
+    const result = await window.openslides.pickWorkspaceFiles?.();
+    if (!result?.success || !result.files?.length) return;
+
+    // Deduplicate by name
+    setWorkspaceFiles(prev => {
+      const names = new Set(prev.map(f => f.name));
+      const newFiles = result.files
+        .filter(f => !names.has(f.name))
+        .map(f => f.type === 'image' ? { ...f, describing: true } : f);
+      return [...prev, ...newFiles];
+    });
+    setShowWorkspace(true);
+
+    // Async OCR each new image via Tesseract
+    const newImages = result.files.filter(f => f.type === 'image');
+    for (const img of newImages) {
+      window.openslides.describeWorkspaceImage?.(img.filePath)
+        .then(res => {
+          setWorkspaceFiles(prev => prev.map(f =>
+            f.name === img.name
+              ? { ...f, describing: false, description: res.success ? res.description : '' }
+              : f
+          ));
+        })
+        .catch(() => {
+          setWorkspaceFiles(prev => prev.map(f =>
+            f.name === img.name ? { ...f, describing: false, description: '' } : f
+          ));
+        });
+    }
+  }, [settings]);
+
   React.useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, thinking, genOutline]);
+
+  React.useEffect(() => {
+    setGenOutline(null);
+    setGenStep(0);
+    setGenDone(false);
+    setGenError('');
+    setError('');
+    abortRef.current = true;
+  }, [sessionId]);
 
   const isGenerating = genOutline && !genDone;
   React.useEffect(() => {
@@ -241,7 +361,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
 
     try {
       setMessages((prev) => [...prev, { role: 'assistant', content: t('genStarting') }]);
-      const outlineResult = await window.openslides.genSoloOutline(text, settings);
+      const outlineResult = await window.openslides.genSoloOutline(text, settings, workspaceFiles.length ? workspaceFiles : undefined);
       if (!outlineResult.success) throw new Error(outlineResult.error);
       const outline = outlineResult.data?.slides;
       const theme = outlineResult.data?.theme || null;
@@ -273,7 +393,8 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
         const s = outline[i];
         const slideResult = await window.openslides.genSoloSlide(
           { outlineSlide: s, allOutline: outline, userRequest: text, slideIndex: i, totalSlides: outline.length, theme },
-          settings
+          settings,
+          workspaceFiles.length ? workspaceFiles : undefined
         );
         if (!slideResult.success || !slideResult.data?.html) {
           errorCount++;
@@ -314,7 +435,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
       setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${err.message}` }]);
       setThinking(false);
     }
-  }, [settings, onApplyAction, setMessages]);
+  }, [settings, onApplyAction, setMessages, workspaceFiles]);
 
   const sendMessage = React.useCallback(async (text) => {
     if (!text.trim() || thinking) return;
@@ -414,7 +535,7 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
         />
       )}
 
-      {/* Mode toggle */}
+      {/* Mode toggle + workspace toggle */}
       <div className="px-4 pb-1 pt-1 flex items-center gap-2 flex-shrink-0">
         <span className="text-xs ui-text-4">{t('genMode')}</span>
         {['template', 'solo'].map((m) => (
@@ -444,7 +565,29 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
             <div className="text-[11px] ui-text-3" style={{lineHeight:1.5}}>{t('genModeSoloDesc')}</div>
           </div>
         </div>
+        <div className="flex-1" />
+        <button
+          onClick={() => setShowWorkspace(v => !v)}
+          className="text-[11px] px-2.5 py-1 rounded-md border transition-all flex items-center gap-1"
+          style={showWorkspace
+            ? {background:'var(--ui-primary)',color:'#fff',borderColor:'var(--ui-primary)',borderWidth:1,borderStyle:'solid'}
+            : {background:'var(--ui-bg-4)',borderColor:'var(--ui-border)',borderWidth:1,borderStyle:'solid',color:'var(--ui-text-3)'}}
+          title={t('workspaceHint')}
+        >
+          📎 {t('workspace')}{workspaceFiles.length > 0 && ` (${workspaceFiles.length})`}
+        </button>
       </div>
+
+      {/* Workspace bar */}
+      {showWorkspace && (
+        <WorkspaceBar
+          files={workspaceFiles}
+          onUpload={handleWorkspaceUpload}
+          onRemove={(i) => setWorkspaceFiles(prev => prev.filter((_, idx) => idx !== i))}
+          onClear={() => setWorkspaceFiles([])}
+          disabled={thinking || isGenerating}
+        />
+      )}
 
       {/* Quick prompts */}
       <div className="px-4 pb-2 flex flex-wrap gap-1.5 flex-shrink-0">
