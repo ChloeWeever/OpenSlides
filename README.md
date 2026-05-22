@@ -29,7 +29,7 @@
 
 ## Features
 
-![](example/1.png)
+![](example/2.png)
 
 - **AI generation** — describe your presentation in natural language; the AI generates a full deck slide by slide
 - **Two generation modes**
