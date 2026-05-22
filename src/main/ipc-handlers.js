@@ -183,12 +183,12 @@ Respond ONLY with raw JSON — no markdown, no explanation:
 {
   "action": "outline",
   "theme": {
-    "bg": "#0f0f1a",
-    "accent": "#6c63ff",
-    "text": "#ffffff",
-    "subtext": "#a0a0b8",
-    "font": "Inter, Arial, sans-serif",
-    "style": "dark modern gradient"
+    "bg": "#f9f7f4",
+    "accent": "#d97757",
+    "text": "#1a1714",
+    "subtext": "#6b6560",
+    "font": "system-ui, -apple-system, 'Segoe UI', sans-serif",
+    "style": "clean light editorial"
   },
   "slides": [
     {
@@ -202,7 +202,7 @@ Respond ONLY with raw JSON — no markdown, no explanation:
 }
 
 Rules:
-- theme: ONE consistent design system for the whole deck. Choose colors and font that suit the topic. style = 2-4 descriptive words (e.g. "dark tech minimal", "bright clean corporate", "bold colorful startup")
+- theme: ONE consistent design system for the whole deck. Default is Anthropic Claude light style (warm off-white bg, coral accent, dark text) — override only when the topic clearly calls for a different style (e.g. tech dark theme, bold startup colors). style = 2-4 descriptive words (e.g. "clean light editorial", "dark tech minimal", "bold colorful startup")
 - id: "slide-1", "slide-2", … (sequential)
 - title: the real heading text for this slide
 - notes: 1-3 sentences describing what this slide should cover
@@ -257,6 +257,21 @@ ipcMain.handle('llm:solo-slide', async (_event, { outlineSlide, allOutline, user
   }
 });
 
+ipcMain.handle('session:gen-title', async (_event, { slideTitles, settings }) => {
+  try {
+    const list = slideTitles.slice(0, 8).map((t, i) => `${i + 1}. ${t}`).join('\n');
+    const messages = [
+      { role: 'system', content: 'You are a concise naming assistant. Given a list of slide titles, output ONLY a short presentation title (5-8 words, no punctuation, no quotes). Nothing else.' },
+      { role: 'user', content: `Slide titles:\n${list}\n\nPresentation title:` },
+    ];
+    const raw = await callLLM(messages, settings, 32);
+    const title = raw.trim().replace(/^["']|["']$/g, '').slice(0, 60);
+    return { success: true, title };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('llm:chat', async (_event, messages, settings, genMode) => {
   resetAbort();
   try {
@@ -304,6 +319,39 @@ ipcMain.handle('settings:save', (_event, settings) => {
   store.set('baseUrl', settings.baseUrl);
   store.set('modelName', settings.modelName);
   return true;
+});
+
+ipcMain.handle('models:list', async (_event, { apiProvider, apiKey, baseUrl }) => {
+  try {
+    const provider = (apiProvider || 'openai').toLowerCase();
+    let url, headers;
+
+    if (provider === 'anthropic') {
+      url = 'https://api.anthropic.com/v1/models';
+      headers = { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'models-2023-06-01' };
+    } else {
+      const base = (baseUrl || 'https://api.openai.com').replace(/\/$/, '');
+      url = base.endsWith('/v1') ? `${base}/models` : `${base}/v1/models`;
+      headers = { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' };
+    }
+
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '');
+      return { success: false, error: `HTTP ${resp.status}: ${body.slice(0, 200)}` };
+    }
+    const json = await resp.json();
+
+    // Normalise: OpenAI returns { data: [{id,...}] }, Anthropic returns { data: [{id,...}] }
+    const raw = Array.isArray(json) ? json : (json.data || []);
+    const models = raw
+      .map(m => typeof m === 'string' ? m : (m.id || m.name || ''))
+      .filter(Boolean)
+      .sort();
+    return { success: true, models };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 
 ipcMain.handle('logo:get', () => store.get('logo', null));

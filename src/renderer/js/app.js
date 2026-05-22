@@ -351,6 +351,14 @@ function App() {
               workspaceFiles={workspaceFiles}
               setWorkspaceFiles={setWorkspaceFiles}
               onNewSession={handleNewSession}
+              onTitleGenerated={(title) => {
+                setSessions(prev => {
+                  const next = prev.map(s => s.id === activeSessionId ? { ...s, title } : s);
+                  const updated = next.find(s => s.id === activeSessionId);
+                  if (updated && window.openslides) window.openslides.saveSession(updated);
+                  return next;
+                });
+              }}
               onBusyChange={setIsBusy}
               lang={lang}
               sessionId={activeSessionId}

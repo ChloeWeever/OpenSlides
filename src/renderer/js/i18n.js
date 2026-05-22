@@ -35,6 +35,9 @@ const STRINGS = {
     baseUrl:             'Base URL',
     model:               'Model',
     saveSettings:        'Save Settings',
+    discover:            'Discover',
+    discoverModels:      'Auto-discover models from the API endpoint',
+    discoverNoModels:    'No models found',
 
     // export modal
     exportPresentation:  'Export Presentation',
@@ -171,6 +174,9 @@ const STRINGS = {
     baseUrl:             '基础 URL',
     model:               '模型',
     saveSettings:        '保存设置',
+    discover:            '发现',
+    discoverModels:      '从 API 端点自动发现可用模型',
+    discoverNoModels:    '未找到模型',
 
     // export modal
     exportPresentation:  '导出演示文稿',

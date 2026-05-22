@@ -164,7 +164,7 @@ function GenerationProgress({ outline, currentStep, done, error }) {
   );
 }
 
-function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElement, onClearSelection, messages, setMessages, workspaceFiles, setWorkspaceFiles, onNewSession, onBusyChange, lang, sessionId }) {
+function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElement, onClearSelection, messages, setMessages, workspaceFiles, setWorkspaceFiles, onNewSession, onTitleGenerated, onBusyChange, lang, sessionId }) {
   const [input, setInput] = React.useState('');
   const [thinking, setThinking] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -338,6 +338,10 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
           ? t('genDoneWithErrors', outline.length, errorCount)
           : t('genDoneAll', outline.length),
       }]);
+      // Async: generate a concise session title from the slide titles
+      window.openslides.genSessionTitle?.(allSlides.map(s =>
+        s.elements?.find(e => e.type === 'heading')?.text || s.id
+      ), settings).then(res => { if (res?.success) onTitleGenerated?.(res.title); }).catch(() => {});
     } catch (err) {
       setGenError(err.message);
       setError(err.message);
@@ -429,6 +433,9 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
           ? t('genDoneWithErrors', outline.length, errorCount)
           : t('genDoneAll', outline.length),
       }]);
+      // Async: generate a concise session title from the outline slide titles
+      window.openslides.genSessionTitle?.(outline.map(s => s.title), settings)
+        .then(res => { if (res?.success) onTitleGenerated?.(res.title); }).catch(() => {});
     } catch (err) {
       setGenError(err.message);
       setError(err.message);

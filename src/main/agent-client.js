@@ -61,6 +61,20 @@ STRICT RULES:
 - Output ONLY raw HTML — no markdown fences, no explanation
 - Follow the design theme colors and font provided in the user message EXACTLY
 
+DEFAULT VISUAL STYLE — Anthropic Claude Light:
+Unless the theme overrides these, use this design language:
+- Background: #f9f7f4 (warm off-white); card/panel surfaces: #ffffff with subtle box-shadow 0 2px 12px rgba(0,0,0,.07)
+- Primary text: #1a1714 (near-black); secondary text: #6b6560; muted: #9e9891
+- Accent: #d97757 (warm coral-orange) — use for highlights, underlines, icons, key numbers
+- Accent hover variant: #c4623e; light accent tint for backgrounds: #fdf1ec
+- Border/divider: #e8e3de (1px solid)
+- Font: system-ui, -apple-system, "Segoe UI", sans-serif; heading weight 700; body weight 400
+- Generous padding: 80–120px margins; breathing room between sections
+- Typography scale: hero headline 96–120px, section heading 64–72px, body 28–32px, caption 22px
+- Layout: clean grid, strong typographic hierarchy, minimal decoration
+- Decorative accents: thin coral left-border on blockquotes, coral underline on key headings, subtle warm gradients (not dark neon)
+- NO drop shadows on text, NO glassmorphism, NO neon glows — keep it crisp and editorial
+
 CONCISENESS — your output MUST fit in ~3000 tokens:
 - Use a <style> block in <head> for shared styles; avoid repeating inline styles
 - CSS shorthand aggressively (font: bold 64px/1.2 Arial)
