@@ -183,39 +183,57 @@ Respond ONLY with raw JSON — no markdown, no explanation:
 {
   "action": "outline",
   "theme": {
-    "bg": "#0f0f1a",
-    "accent": "#6c63ff",
-    "text": "#ffffff",
-    "subtext": "#a0a0b8",
-    "font": "Inter, Arial, sans-serif",
-    "style": "dark modern gradient"
+    "bg": "#f9f7f4",
+    "accent": "#d97757",
+    "text": "#1a1714",
+    "subtext": "#6b6560",
+    "font": "system-ui, -apple-system, 'Segoe UI', sans-serif",
+    "style": "clean light editorial"
   },
   "slides": [
     {
       "id": "slide-1",
       "title": "Slide Title",
       "notes": "Key points and content for this slide",
-      "style": "hero — large headline, bold accent color, minimal elements"
+      "style": "hero — large headline, bold accent color, minimal elements",
+      "imageRef": null
     }
   ]
 }
 
 Rules:
-- theme: ONE consistent design system for the whole deck. Choose colors and font that suit the topic. style = 2-4 descriptive words (e.g. "dark tech minimal", "bright clean corporate", "bold colorful startup")
+- theme: ONE consistent design system for the whole deck. Default is Anthropic Claude light style (warm off-white bg, coral accent, dark text) — override only when the topic clearly calls for a different style (e.g. tech dark theme, bold startup colors). style = 2-4 descriptive words (e.g. "clean light editorial", "dark tech minimal", "bold colorful startup")
 - id: "slide-1", "slide-2", … (sequential)
 - title: the real heading text for this slide
 - notes: 1-3 sentences describing what this slide should cover
 - style (per slide): layout + mood hint for the designer, e.g. "hero full-bleed", "two-column data", "big quote centered", "icon grid", "timeline horizontal", "chart + callout"
+- imageRef: if workspace images are provided, assign EACH image to AT MOST ONE slide where it fits best — use the exact filename (e.g. "app_ui.png"). Set to null for slides that need no image. Never assign the same image to more than one slide.
 - Aim for 6-12 slides unless the request clearly needs more or fewer`;
 
 // solo-slide generation is handled by agent-client.js (LangGraph tool calling)
 
-ipcMain.handle('llm:solo-outline', async (_event, { text, settings }) => {
+ipcMain.handle('llm:solo-outline', async (_event, { text, settings, workspaceFiles }) => {
   resetAbort();
   try {
+    let userContent = text;
+    let systemContent = SOLO_OUTLINE_PROMPT;
+
+    if (workspaceFiles?.length) {
+      const textFiles = workspaceFiles.filter(f => f.type === 'text');
+      const imageFiles = workspaceFiles.filter(f => f.type === 'image');
+      if (imageFiles.length) {
+        systemContent += `\n\nAvailable workspace images (assign each to at most one slide via imageRef):\n` +
+          imageFiles.map(f => `  - "${f.name}"${f.description ? ` — OCR text: "${f.description.slice(0, 300)}"` : ''}`).join('\n');
+      }
+      if (textFiles.length) {
+        userContent += '\n\n--- Reference documents ---\n' +
+          textFiles.map(f => `[${f.name}]\n${f.text}`).join('\n\n');
+      }
+    }
+
     const messages = [
-      { role: 'system', content: SOLO_OUTLINE_PROMPT },
-      { role: 'user', content: text },
+      { role: 'system', content: systemContent },
+      { role: 'user', content: userContent },
     ];
     const rawText = await callLLM(messages, settings, 16000, getSignal());
     const parsed = parseJSONResponse(rawText);
@@ -231,9 +249,24 @@ ipcMain.handle('llm:solo-outline', async (_event, { text, settings }) => {
   }
 });
 
-ipcMain.handle('llm:solo-slide', async (_event, { outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme, settings }) => {
+ipcMain.handle('llm:solo-slide', async (_event, { outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme, settings, workspaceFiles }) => {
   try {
-    return await genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme }, settings, getSignal());
+    return await genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme, workspaceFiles }, settings, getSignal());
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('session:gen-title', async (_event, { slideTitles, settings }) => {
+  try {
+    const list = slideTitles.slice(0, 8).map((t, i) => `${i + 1}. ${t}`).join('\n');
+    const messages = [
+      { role: 'system', content: 'You are a concise naming assistant. Given a list of slide titles, output ONLY a short presentation title (5-8 words, no punctuation, no quotes). Nothing else.' },
+      { role: 'user', content: `Slide titles:\n${list}\n\nPresentation title:` },
+    ];
+    const raw = await callLLM(messages, settings, 32);
+    const title = raw.trim().replace(/^["']|["']$/g, '').slice(0, 60);
+    return { success: true, title };
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -288,6 +321,39 @@ ipcMain.handle('settings:save', (_event, settings) => {
   return true;
 });
 
+ipcMain.handle('models:list', async (_event, { apiProvider, apiKey, baseUrl }) => {
+  try {
+    const provider = (apiProvider || 'openai').toLowerCase();
+    let url, headers;
+
+    if (provider === 'anthropic') {
+      url = 'https://api.anthropic.com/v1/models';
+      headers = { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-beta': 'models-2023-06-01' };
+    } else {
+      const base = (baseUrl || 'https://api.openai.com').replace(/\/$/, '');
+      url = base.endsWith('/v1') ? `${base}/models` : `${base}/v1/models`;
+      headers = { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' };
+    }
+
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '');
+      return { success: false, error: `HTTP ${resp.status}: ${body.slice(0, 200)}` };
+    }
+    const json = await resp.json();
+
+    // Normalise: OpenAI returns { data: [{id,...}] }, Anthropic returns { data: [{id,...}] }
+    const raw = Array.isArray(json) ? json : (json.data || []);
+    const models = raw
+      .map(m => typeof m === 'string' ? m : (m.id || m.name || ''))
+      .filter(Boolean)
+      .sort();
+    return { success: true, models };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('logo:get', () => store.get('logo', null));
 ipcMain.handle('logo:save', (_event, logo) => { store.set('logo', logo); return true; });
 
@@ -334,6 +400,53 @@ ipcMain.handle('image:pick', async () => {
     const mime = ext === 'svg' ? 'image/svg+xml' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : `image/${ext}`;
     const dataUrl = `data:${mime};base64,${data.toString('base64')}`;
     return { success: true, dataUrl, name: path.basename(filePaths[0]) };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('workspace:pick-files', async () => {
+  const win = BrowserWindow.getFocusedWindow();
+  const { filePaths, canceled } = await dialog.showOpenDialog(win, {
+    title: 'Add to Workspace',
+    filters: [
+      { name: 'All Supported', extensions: ['png','jpg','jpeg','gif','webp','svg','txt','md','csv','json'] },
+      { name: 'Images', extensions: ['png','jpg','jpeg','gif','webp','svg'] },
+      { name: 'Text / Documents', extensions: ['txt','md','csv','json'] },
+    ],
+    properties: ['openFile', 'multiSelections'],
+  });
+  if (canceled || !filePaths.length) return { success: false, files: [] };
+  const IMAGE_EXTS = new Set(['png','jpg','jpeg','gif','webp','svg']);
+  const files = [];
+  for (const fp of filePaths) {
+    const ext = path.extname(fp).slice(1).toLowerCase();
+    const name = path.basename(fp);
+    try {
+      if (IMAGE_EXTS.has(ext)) {
+        const data = fs.readFileSync(fp);
+        const mime = ext === 'svg' ? 'image/svg+xml' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : `image/${ext}`;
+        const dataUrl = `data:${mime};base64,${data.toString('base64')}`;
+        files.push({ name, type: 'image', mimeType: mime, dataUrl, filePath: fp });
+      } else {
+        const text = fs.readFileSync(fp, 'utf8');
+        files.push({ name, type: 'text', mimeType: 'text/plain', text: text.slice(0, 20000) });
+      }
+    } catch (err) {
+      // skip unreadable files
+    }
+  }
+  return { success: true, files };
+});
+
+ipcMain.handle('workspace:describe-image', async (_event, { filePath }) => {
+  try {
+    const { createWorker } = require('tesseract.js');
+    const worker = await createWorker('eng+chi_sim');
+    const { data: { text } } = await worker.recognize(filePath);
+    await worker.terminate();
+    const trimmed = text.trim();
+    return { success: true, description: trimmed };
   } catch (err) {
     return { success: false, error: err.message };
   }

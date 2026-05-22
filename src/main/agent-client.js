@@ -61,6 +61,20 @@ STRICT RULES:
 - Output ONLY raw HTML — no markdown fences, no explanation
 - Follow the design theme colors and font provided in the user message EXACTLY
 
+DEFAULT VISUAL STYLE — Anthropic Claude Light:
+Unless the theme overrides these, use this design language:
+- Background: #f9f7f4 (warm off-white); card/panel surfaces: #ffffff with subtle box-shadow 0 2px 12px rgba(0,0,0,.07)
+- Primary text: #1a1714 (near-black); secondary text: #6b6560; muted: #9e9891
+- Accent: #d97757 (warm coral-orange) — use for highlights, underlines, icons, key numbers
+- Accent hover variant: #c4623e; light accent tint for backgrounds: #fdf1ec
+- Border/divider: #e8e3de (1px solid)
+- Font: system-ui, -apple-system, "Segoe UI", sans-serif; heading weight 700; body weight 400
+- Generous padding: 80–120px margins; breathing room between sections
+- Typography scale: hero headline 96–120px, section heading 64–72px, body 28–32px, caption 22px
+- Layout: clean grid, strong typographic hierarchy, minimal decoration
+- Decorative accents: thin coral left-border on blockquotes, coral underline on key headings, subtle warm gradients (not dark neon)
+- NO drop shadows on text, NO glassmorphism, NO neon glows — keep it crisp and editorial
+
 CONCISENESS — your output MUST fit in ~3000 tokens:
 - Use a <style> block in <head> for shared styles; avoid repeating inline styles
 - CSS shorthand aggressively (font: bold 64px/1.2 Arial)
@@ -268,7 +282,7 @@ Call the generate_slide tool with the complete slide object.`;
   return { success: true, data: { action: 'add_slides', slides: [slide] } };
 }
 
-async function genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme }, settings, signal) {
+async function genSoloSlideWithAgent({ outlineSlide, allOutline, userRequest, slideIndex, totalSlides, theme, workspaceFiles }, settings, signal) {
   const label = `solo slide ${slideIndex + 1}/${totalSlides} "${outlineSlide.title}"`;
   log.info(`▶ genSoloSlide ${label} — model: ${settings.modelName || 'gpt-4o'}`);
   const t0 = Date.now();
@@ -287,7 +301,24 @@ Design theme (apply consistently):
 Content brief: ${outlineSlide.notes || outlineSlide.title || ''}
 Slide style: ${outlineSlide.style || 'content slide'}
 This is slide ${slideIndex + 1} of ${totalSlides}
-
+${(() => {
+  const lines = [];
+  // Assigned image for this slide (from outline planning)
+  if (outlineSlide.imageRef && workspaceFiles?.length) {
+    const img = workspaceFiles.find(f => f.type === 'image' && f.name === outlineSlide.imageRef);
+    if (img) {
+      lines.push(`\nAssigned image: use <img src="workspace://${img.name}"> to embed it in this slide.`);
+      if (img.description) lines.push(`OCR text from image: "${img.description.slice(0, 500)}"`);
+    }
+  }
+  // Text reference documents (available to all slides)
+  const txts = workspaceFiles?.filter(f => f.type === 'text') || [];
+  if (txts.length) {
+    lines.push('\n--- Reference documents ---');
+    txts.forEach(f => lines.push(`[${f.name}]:\n${f.text.slice(0, 2000)}`));
+  }
+  return lines.join('\n');
+})()}
 Output the complete HTML document now.`;
 
   const systemSize = SOLO_SLIDE_SYSTEM.length;
@@ -308,6 +339,13 @@ Output the complete HTML document now.`;
 
   // Strip markdown fences if model wrapped the HTML
   html = html.replace(/^```(?:html)?\s*/i, '').replace(/```\s*$/, '').trim();
+
+  // Replace workspace:// placeholders with actual dataUrls
+  if (workspaceFiles?.length) {
+    const imgMap = {};
+    workspaceFiles.filter(f => f.type === 'image').forEach(f => { imgMap[f.name] = f.dataUrl; });
+    html = html.replace(/workspace:\/\/([^\s"']+)/g, (match, name) => imgMap[name] || match);
+  }
 
   // If truncated (no closing tags), patch it so the browser can at least render what's there
   if (html && !html.includes('</html>')) {

@@ -7,12 +7,21 @@ function SettingsModal({ open, onClose, onSave, onHelp, lang }) {
     baseUrl: 'https://api.openai.com',
     modelName: 'gpt-4o',
   });
+  const [discovering, setDiscovering] = React.useState(false);
+  const [discoveredModels, setDiscoveredModels] = React.useState([]);
+  const [discoverError, setDiscoverError] = React.useState('');
+  const [showModelList, setShowModelList] = React.useState(false);
 
   React.useEffect(() => {
     if (open && window.openslides) {
       window.openslides.getSettings().then((s) => {
         if (s) setForm((f) => ({ ...f, ...s }));
       });
+    }
+    if (!open) {
+      setDiscoveredModels([]);
+      setDiscoverError('');
+      setShowModelList(false);
     }
   }, [open]);
 
@@ -25,6 +34,33 @@ function SettingsModal({ open, onClose, onSave, onHelp, lang }) {
   const handleProviderChange = (provider) => {
     const preset = providerPresets[provider] || {};
     setForm((f) => ({ ...f, apiProvider: provider, ...preset }));
+    setDiscoveredModels([]);
+    setDiscoverError('');
+    setShowModelList(false);
+  };
+
+  const handleDiscover = async () => {
+    setDiscovering(true);
+    setDiscoverError('');
+    setDiscoveredModels([]);
+    setShowModelList(false);
+    const result = await window.openslides.listModels({
+      apiProvider: form.apiProvider,
+      apiKey: form.apiKey,
+      baseUrl: form.baseUrl,
+    });
+    setDiscovering(false);
+    if (result.success && result.models.length) {
+      setDiscoveredModels(result.models);
+      setShowModelList(true);
+    } else {
+      setDiscoverError(result.error || t('discoverNoModels'));
+    }
+  };
+
+  const handleSelectModel = (model) => {
+    setForm((f) => ({ ...f, modelName: model }));
+    setShowModelList(false);
   };
 
   const handleSave = async () => {
@@ -105,19 +141,53 @@ function SettingsModal({ open, onClose, onSave, onHelp, lang }) {
             />
           </div>
 
-          {/* Model */}
+          {/* Model + Discover */}
           <div>
             <label className="block text-sm font-medium ui-text-2 mb-1.5">{t('model')}</label>
-            <input
-              type="text"
-              value={form.modelName}
-              onChange={(e) => setForm((f) => ({ ...f, modelName: e.target.value }))}
-              placeholder="gpt-4o"
-              className={inputCls}
-              style={{outline:'none'}}
-              onFocus={e => e.target.style.boxShadow='0 0 0 2px var(--ui-primary)'}
-              onBlur={e => e.target.style.boxShadow=''}
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={form.modelName}
+                onChange={(e) => setForm((f) => ({ ...f, modelName: e.target.value }))}
+                placeholder="gpt-4o"
+                className={inputCls}
+                style={{outline:'none'}}
+                onFocus={e => e.target.style.boxShadow='0 0 0 2px var(--ui-primary)'}
+                onBlur={e => e.target.style.boxShadow=''}
+              />
+              <button
+                onClick={handleDiscover}
+                disabled={discovering || !form.apiKey}
+                className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium border ui-border ui-text-3 hover:ui-text hover:ui-border-2 disabled:opacity-40 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+                style={{borderWidth:1,borderStyle:'solid'}}
+                title={t('discoverModels')}
+              >
+                {discovering ? '…' : t('discover')}
+              </button>
+            </div>
+
+            {/* Error */}
+            {discoverError && (
+              <p className="text-xs mt-1.5" style={{color:'var(--ui-error, #f38ba8)'}}>{discoverError}</p>
+            )}
+
+            {/* Model dropdown list */}
+            {showModelList && discoveredModels.length > 0 && (
+              <div className="mt-1.5 ui-bg-4 border ui-border rounded-lg overflow-hidden" style={{borderWidth:1,borderStyle:'solid',maxHeight:200,overflowY:'auto'}}>
+                {discoveredModels.map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => handleSelectModel(m)}
+                    className={`w-full text-left px-3 py-2 text-xs transition-colors hover:ui-bg-5 ${
+                      form.modelName === m ? 'ui-text font-medium' : 'ui-text-3'
+                    }`}
+                  >
+                    {form.modelName === m && <span className="mr-1.5" style={{color:'var(--ui-primary)'}}>✓</span>}
+                    {m}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

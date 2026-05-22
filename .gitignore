@@ -5,3 +5,4 @@ out/
 Thumbs.db
 *.log
 .claude/
+*.traineddata

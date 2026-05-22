@@ -308,6 +308,25 @@ function ThemeSwatch({ theme, active, onClick }) {
 }
 
 function ThumbnailSlide({ slide }) {
+  if (slide.soloHtml) {
+    return (
+      <div style={{width:'100%',height:'100%',overflow:'hidden',position:'relative',background:slide.background||'#1e1e2e'}}>
+        <iframe
+          srcdoc={slide.soloHtml}
+          sandbox="allow-scripts allow-same-origin"
+          scrolling="no"
+          style={{
+            width: 1920,
+            height: 1080,
+            border: 'none',
+            transformOrigin: '0 0',
+            transform: `scale(${96 / 1920})`,
+            pointerEvents: 'none',
+          }}
+        />
+      </div>
+    );
+  }
   return (
     <div style={{ background: slide.background || '#1e1e2e', color: slide.color || '#cdd6f4', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '4px', overflow: 'hidden' }}>
       {(slide.elements || []).slice(0, 3).map((el, i) => (

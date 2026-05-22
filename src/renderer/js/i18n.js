@@ -35,6 +35,9 @@ const STRINGS = {
     baseUrl:             'Base URL',
     model:               'Model',
     saveSettings:        'Save Settings',
+    discover:            'Discover',
+    discoverModels:      'Auto-discover models from the API endpoint',
+    discoverNoModels:    'No models found',
 
     // export modal
     exportPresentation:  'Export Presentation',
@@ -74,6 +77,13 @@ const STRINGS = {
     genDoneAll:          '✓ All {0} slides generated!',
     genAborted:          '⏹ Generation stopped ({0} slides kept)',
     stopGeneration:      'Stop',
+
+    // workspace
+    workspace:           'Workspace',
+    workspaceUpload:     'Upload files',
+    workspaceEmpty:      'No files — add images or docs for AI reference',
+    workspaceClear:      'Clear all',
+    workspaceHint:       'Files in workspace will be referenced by AI when generating slides',
 
     // preview panel toolbar
     prevSlide:           'Previous slide',
@@ -164,6 +174,9 @@ const STRINGS = {
     baseUrl:             '基础 URL',
     model:               '模型',
     saveSettings:        '保存设置',
+    discover:            '发现',
+    discoverModels:      '从 API 端点自动发现可用模型',
+    discoverNoModels:    '未找到模型',
 
     // export modal
     exportPresentation:  '导出演示文稿',
@@ -203,6 +216,13 @@ const STRINGS = {
     genDoneAll:          '✓ 全部 {0} 页幻灯片已生成完成！',
     genAborted:          '⏹ 已停止（已保留 {0} 页）',
     stopGeneration:      '停止',
+
+    // workspace
+    workspace:           '工作区',
+    workspaceUpload:     '上传文件',
+    workspaceEmpty:      '暂无文件 — 可添加图片或文档供 AI 参考',
+    workspaceClear:      '全部清除',
+    workspaceHint:       '工作区中的文件将在生成幻灯片时被 AI 参考',
 
     // preview panel toolbar
     prevSlide:           '上一张',
