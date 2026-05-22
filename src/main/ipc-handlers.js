@@ -310,6 +310,7 @@ ipcMain.handle('settings:get', () => {
     apiKey: store.get('apiKey'),
     baseUrl: store.get('baseUrl'),
     modelName: store.get('modelName'),
+    petSpritesheetUrl: store.get('petSpritesheetUrl', ''),
   };
 });
 
@@ -318,6 +319,7 @@ ipcMain.handle('settings:save', (_event, settings) => {
   store.set('apiKey', settings.apiKey);
   store.set('baseUrl', settings.baseUrl);
   store.set('modelName', settings.modelName);
+  store.set('petSpritesheetUrl', settings.petSpritesheetUrl || '');
   return true;
 });
 
@@ -356,6 +358,17 @@ ipcMain.handle('models:list', async (_event, { apiProvider, apiKey, baseUrl }) =
 
 ipcMain.handle('logo:get', () => store.get('logo', null));
 ipcMain.handle('logo:save', (_event, logo) => { store.set('logo', logo); return true; });
+
+ipcMain.handle('pet:fetch-manifest', async () => {
+  try {
+    const resp = await fetch('https://petdex.crafter.run/api/manifest');
+    if (!resp.ok) return { error: `HTTP ${resp.status}` };
+    const data = await resp.json();
+    return { data };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
 
 ipcMain.handle('presentation:save', (_event, data) => {
   store.set('presentation', data);

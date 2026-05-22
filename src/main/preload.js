@@ -22,4 +22,5 @@ contextBridge.exposeInMainWorld('openslides', {
   describeWorkspaceImage: (filePath) => ipcRenderer.invoke('workspace:describe-image', { filePath }),
   getLogo: () => ipcRenderer.invoke('logo:get'),
   saveLogo: (logo) => ipcRenderer.invoke('logo:save', logo),
+  fetchPetManifest: () => ipcRenderer.invoke('pet:fetch-manifest'),
 });

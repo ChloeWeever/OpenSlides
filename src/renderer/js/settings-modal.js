@@ -6,6 +6,7 @@ function SettingsModal({ open, onClose, onSave, onHelp, lang }) {
     apiKey: '',
     baseUrl: 'https://api.openai.com',
     modelName: 'gpt-4o',
+    petSpritesheetUrl: '',
   });
   const [discovering, setDiscovering] = React.useState(false);
   const [discoveredModels, setDiscoveredModels] = React.useState([]);
@@ -75,7 +76,7 @@ function SettingsModal({ open, onClose, onSave, onHelp, lang }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm no-drag">
-      <div className="ui-bg-3 border ui-border rounded-xl shadow-2xl w-full max-w-md p-6 panel-enter" style={{borderWidth:1,borderStyle:'solid'}}>
+      <div className="ui-bg-3 border ui-border rounded-xl shadow-2xl w-full max-w-lg p-6 panel-enter" style={{borderWidth:1,borderStyle:'solid'}}>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -189,6 +190,16 @@ function SettingsModal({ open, onClose, onSave, onHelp, lang }) {
               </div>
             )}
           </div>
+        </div>
+
+        {/* ── Desktop Pet ── */}
+        <div className="mt-4 pt-4" style={{borderTop:'1px solid var(--ui-border)'}}>
+          <p className="text-xs font-semibold ui-text-3 uppercase tracking-wide mb-3">{t('petSection')}</p>
+          <PetdexGallery
+            activePetUrl={form.petSpritesheetUrl || ''}
+            onSelect={(url) => setForm(f => ({ ...f, petSpritesheetUrl: url }))}
+            onClear={() => setForm(f => ({ ...f, petSpritesheetUrl: '' }))}
+          />
         </div>
 
         {/* Footer */}

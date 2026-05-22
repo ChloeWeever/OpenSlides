@@ -36,6 +36,7 @@ function App() {
     apiKey: '',
     baseUrl: 'https://api.openai.com',
     modelName: 'gpt-4o',
+    petSpritesheetUrl: '',
   });
   const [selectedElement, setSelectedElement] = React.useState(null);
   const [showEditor, setShowEditor] = React.useState(false);
@@ -295,7 +296,7 @@ function App() {
 
       {/* Main two-pane layout */}
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex-[3] min-w-0 overflow-hidden">
+        <div className="flex-[3] min-w-0 overflow-hidden" style={{position:'relative'}}>
           <PreviewPanel
             slides={slideManager.slides}
             currentIndex={slideManager.currentIndex}
@@ -323,6 +324,7 @@ function App() {
             logo={logo}
             onOpenLogo={() => setLogoOpen(true)}
           />
+          <PetFloat spritesheetUrl={settings.petSpritesheetUrl} isBusy={isBusy} />
         </div>
         <div className="flex-[2] min-w-0 overflow-hidden" style={{ minWidth: 320, maxWidth: 480 }}>
           {showEditor ? (
