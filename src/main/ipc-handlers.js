@@ -223,7 +223,11 @@ ipcMain.handle('llm:solo-outline', async (_event, { text, settings, workspaceFil
       const imageFiles = workspaceFiles.filter(f => f.type === 'image');
       if (imageFiles.length) {
         systemContent += `\n\nAvailable workspace images (assign each to at most one slide via imageRef):\n` +
-          imageFiles.map(f => `  - "${f.name}"${f.description ? ` — OCR text: "${f.description.slice(0, 300)}"` : ''}`).join('\n');
+          imageFiles.map(f => {
+            const dims = (f.width && f.height) ? ` ${f.width}×${f.height}px` : '';
+            const ocr  = f.description ? ` — OCR: "${f.description.slice(0, 300)}"` : '';
+            return `  - "${f.name}"${dims}${ocr}`;
+          }).join('\n');
       }
       if (textFiles.length) {
         userContent += '\n\n--- Reference documents ---\n' +

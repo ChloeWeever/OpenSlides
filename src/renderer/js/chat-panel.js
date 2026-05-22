@@ -187,7 +187,15 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
     const result = await window.openslides.pickWorkspaceFiles?.();
     if (!result?.success || !result.files?.length) return;
 
-    // Deduplicate by name
+    // Measure image dimensions in the renderer via new Image()
+    const measureImage = (dataUrl) => new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      img.onerror = () => resolve({ width: null, height: null });
+      img.src = dataUrl;
+    });
+
+    // Deduplicate by name, mark images as describing:true
     setWorkspaceFiles(prev => {
       const names = new Set(prev.map(f => f.name));
       const newFiles = result.files
@@ -197,9 +205,16 @@ function ChatPanel({ slides, currentSlide, onApplyAction, settings, selectedElem
     });
     setShowWorkspace(true);
 
-    // Async OCR each new image via Tesseract
+    // Async: measure dimensions + OCR each new image
     const newImages = result.files.filter(f => f.type === 'image');
     for (const img of newImages) {
+      // Measure dimensions immediately (fast)
+      measureImage(img.dataUrl).then(({ width, height }) => {
+        setWorkspaceFiles(prev => prev.map(f =>
+          f.name === img.name ? { ...f, width, height } : f
+        ));
+      });
+      // OCR via Tesseract (slow)
       window.openslides.describeWorkspaceImage?.(img.filePath)
         .then(res => {
           setWorkspaceFiles(prev => prev.map(f =>

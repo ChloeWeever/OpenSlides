@@ -307,7 +307,9 @@ ${(() => {
   if (outlineSlide.imageRef && workspaceFiles?.length) {
     const img = workspaceFiles.find(f => f.type === 'image' && f.name === outlineSlide.imageRef);
     if (img) {
+      const dims = (img.width && img.height) ? ` (${img.width}×${img.height}px, aspect ratio ${(img.width/img.height).toFixed(2)})` : '';
       lines.push(`\nAssigned image: use <img src="workspace://${img.name}"> to embed it in this slide.`);
+      lines.push(`Image dimensions: ${img.width && img.height ? `${img.width}×${img.height}px` : 'unknown'}${dims ? ` — maintain this aspect ratio when sizing the <img> element` : ''}`);
       if (img.description) lines.push(`OCR text from image: "${img.description.slice(0, 500)}"`);
     }
   }
