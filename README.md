@@ -122,6 +122,78 @@ npm run make
 
 Packaged output appears in `dist/`.
 
+## CLI
+
+OpenSlides also ships a headless command-line version with the same generation pipeline as the desktop app. It reads an LLM provider config from `~/.openslides/config.yaml` and writes the same self-contained HTML deck that the desktop app's "Export HTML" button produces.
+
+### Install
+
+```bash
+npm install
+npm link        # exposes the `openslides` command globally
+# or run without linking:
+node src/cli/index.js --help
+```
+
+### Configure
+
+Create `~/.openslides/config.yaml`:
+
+```yaml
+provider: openai          # openai | anthropic | litellm
+apiKey: sk-...
+baseUrl: https://api.openai.com   # optional; falls back to provider default
+model: gpt-4o
+# Optional brand-logo overlay (mirrors the desktop app)
+logo:
+  enabled: true
+  path: ./logo.png        # relative to the config file, or use dataUrl directly
+  position: bottom-right  # top-left | top-right | bottom-left | bottom-right
+  width: 80
+  opacity: 1
+```
+
+Run `openslides config` to print the resolved settings (the API key is masked).
+
+### Build a deck
+
+```bash
+# From an inline prompt (solo mode is the default)
+openslides build -m "generate an introduction ppt about OpenSlides"
+
+# From a prompt file
+openslides build -f ./prompt.md
+
+# With a workspace folder (images + text are read and fed to the agent)
+openslides build -m "summarize the readme" -w ./workspace
+
+# Template mode + custom output path
+openslides build -m "history of AI" --mode template -o ./decks/ai.html
+
+# Skip the title-generation LLM call
+openslides build -m "..." --title "My Deck"
+```
+
+Hit `Ctrl-C` at any point to abort.
+
+### Edit a deck
+
+`edit` re-parses a previously generated deck, asks the model to apply the edit, and rewrites the HTML in place (or to `-o`). Each slide is round-tripped through its full HTML so both solo and template decks are editable.
+
+```bash
+# Tweak in place
+openslides edit ./decks/ai.html -m "add a presenter slide for Chloe at the end"
+
+# From a file, writing to a new path
+openslides edit ./decks/ai.html -f ./edit-instructions.md -o ./decks/ai.v2.html
+```
+
+### Notes / limits
+
+- The CLI uses the same modules as the desktop app (`src/core/export-html.js`, `src/core/orchestrate.js`, `src/main/agent-client.js`, `src/main/llm-client.js`), so output is byte-identical to the desktop "Export HTML" path.
+- Workspace files mirror the desktop upload: top-level images (`png/jpg/jpeg/gif/webp/svg`) and text (`txt/md/csv/json`). Images are OCR'd via Tesseract and inlined as base64 data URLs.
+- `edit` treats every slide as a full HTML document for round-tripping. Template-mode decks stay valid, but new slides added via `add_slides` will be solo-style.
+
 ## License
 
 GPL-3.0 © [Chloe Weever](https://github.com/ChloeWeever) — see [LICENSE](LICENSE) for details.

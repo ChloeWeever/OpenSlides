@@ -1,16 +1,34 @@
 {
   "name": "openslides",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "AI-powered presentation editor",
   "main": "src/main/main.js",
+  "bin": {
+    "openslides": "src/cli/index.js"
+  },
   "author": "Chloe Weever",
   "license": "GPL-3.0",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
+    "cli": "node src/cli/index.js",
+    "build:cli": "pkg . --targets node20-win-x64 --output dist-cli/openslides.exe",
+    "build:cli:all": "pkg . --targets node20-win-x64,node20-macos-x64,node20-macos-arm64,node20-linux-x64 --out-path dist-cli",
     "make": "electron-builder",
     "make:win": "electron-builder --win",
     "make:mac": "electron-builder --mac"
+  },
+  "pkg": {
+    "scripts": [
+      "src/cli/**/*.js",
+      "src/core/**/*.js",
+      "src/main/llm-client.js",
+      "src/main/agent-client.js"
+    ],
+    "assets": [
+      "src/renderer/slide-frame/chart.min.js",
+      "src/renderer/slide-frame/slide-frame.js"
+    ]
   },
   "build": {
     "appId": "com.chloeweever.openslides",
@@ -69,6 +87,7 @@
   },
   "keywords": [],
   "devDependencies": {
+    "@yao-pkg/pkg": "^6.19.0",
     "electron": "^29.0.0",
     "electron-builder": "^26.8.1",
     "sharp": "^0.34.5"
@@ -80,6 +99,7 @@
     "@langchain/openai": "^1.4.6",
     "chart.js": "^4.5.1",
     "electron-store": "^8.2.0",
+    "js-yaml": "^4.1.1",
     "tesseract.js": "^7.0.0",
     "zod": "^4.4.3"
   }
